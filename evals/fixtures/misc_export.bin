@@ -1,0 +1,3 @@
+key1=a93f;key2=002;flag=true;mode=raw;chk=9f01a
+key1=b02c;key2=117;flag=false;mode=raw;chk=11bde
+key1=a93f;key2=002;flag=true;mode=cooked;chk=aa90

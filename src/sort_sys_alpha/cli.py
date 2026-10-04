@@ -8,6 +8,8 @@ import typer
 
 from .apply import apply_plan
 from .config import load_config
+from .evaluate import render_report as render_eval_report
+from .evaluate import run_eval
 from .identify import identify_item
 from .journal import last_run_id, undo_run
 from .llm.backend import describe_backend
@@ -21,11 +23,6 @@ app = typer.Typer(
     help="Keep Downloads usable without handing files to a cloud service.",
     no_args_is_help=True,
 )
-
-
-def _not_implemented(command: str, milestone: str) -> None:
-    typer.echo(f"'{command}' is not implemented yet (lands in {milestone}).")
-    raise typer.Exit(code=1)
 
 
 @app.command()
@@ -126,9 +123,16 @@ def undo(
 
 
 @app.command(name="eval")
-def eval_() -> None:
+def eval_(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    evals_dir: Path = typer.Option(
+        Path("evals"), "--evals-dir", help="Path to the eval fixture set."
+    ),
+) -> None:
     """Run the labeled fixture set, print accuracy per category."""
-    _not_implemented("eval", "M5")
+    config = load_config(config_path)
+    results = run_eval(evals_dir, config)
+    typer.echo(render_eval_report(results, config))
 
 
 @app.command()

@@ -17,6 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
+# Lives here, not in scan.py, so low-level modules (feedback.py) that need it
+# don't have to import through scan.py's route.py -> llm/ -> feedback.py
+# chain and create a cycle. scan.py re-exports it for its existing callers.
+STATE_DIR_NAME = ".sort-sys-alpha"
+
 DEFAULT_CONSOLES = [
     "nes", "snes", "n64", "gb", "gbc", "gba", "nds", "gc", "wii",
     "psx", "ps2", "psp", "genesis", "saturn", "dreamcast",

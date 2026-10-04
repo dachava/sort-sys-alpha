@@ -1,9 +1,11 @@
+import json
 from pathlib import Path
 
 from sort_sys_alpha.apply import apply_plan
 from sort_sys_alpha.config import Config
+from sort_sys_alpha.feedback import read_routing_entries
 from sort_sys_alpha.journal import read_entries
-from sort_sys_alpha.plan import build_plan
+from sort_sys_alpha.plan import build_plan, load_plan, write_plan
 
 
 def _config(tmp_path: Path, **overrides) -> Config:
@@ -115,6 +117,74 @@ def test_apply_does_not_report_a_grab_bag_folder_with_a_held_file(tmp_path: Path
 
     assert result.emptied_folders == []
     assert any(junk.iterdir())
+
+
+def test_apply_records_a_correction_when_the_plan_category_was_hand_edited(
+    tmp_path: Path, fake_llm_server
+) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+    )
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.9,
+                "reason": "looks like a document",
+            }
+        )
+    )
+
+    the_plan = build_plan(config)
+    plan_path, _report_path = write_plan(the_plan, config)
+
+    # Simulate a human hand-editing plan.json before `apply` runs.
+    data = json.loads(plan_path.read_text())
+    data["moves"][0]["category"] = "Other"
+    data["moves"][0]["target"] = str(config.dest / "Other" / "a-mystery-file.xyz123")
+    plan_path.write_text(json.dumps(data))
+
+    edited_plan = load_plan(plan_path)
+    apply_plan(edited_plan, config)
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 2
+    assert entries[0].outcome == "moved"
+    assert entries[0].category == "Documents"
+    assert entries[1].outcome == "corrected"
+    assert entries[1].category == "Other"
+
+
+def test_apply_does_not_record_a_correction_when_the_category_is_unchanged(
+    tmp_path: Path, fake_llm_server
+) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+    )
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.9,
+                "reason": "looks like a document",
+            }
+        )
+    )
+
+    the_plan = build_plan(config)
+    apply_plan(the_plan, config)
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].outcome == "moved"
 
 
 def test_apply_cross_volume_fallback_still_verifies_and_removes_source(

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from sort_sys_alpha.config import Config
+from sort_sys_alpha.feedback import read_routing_entries
 from sort_sys_alpha.plan import build_plan, load_plan, render_report, write_plan
 from sort_sys_alpha.scan import STATE_DIR_NAME
 
@@ -61,6 +62,39 @@ def test_build_plan_routes_a_rule_miss_through_the_llm(tmp_path: Path, fake_llm_
 
     report = render_report(the_plan)
     assert "model suggests deleting" in report
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].outcome == "moved"
+    assert entries[0].category == "Documents"
+
+
+def test_build_plan_records_a_held_llm_verdict_in_routing_log(
+    tmp_path: Path, fake_llm_server
+) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+        confidence_min=0.95,
+    )
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.5,
+                "reason": "not sure",
+            }
+        )
+    )
+
+    build_plan(config)
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].outcome == "held"
 
 
 def test_build_plan_includes_scan_skips_as_holds(tmp_path: Path) -> None:

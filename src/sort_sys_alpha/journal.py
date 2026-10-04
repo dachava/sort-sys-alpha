@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from . import feedback
 from .config import Config
 from .movefs import move_path
 from .scan import STATE_DIR_NAME
@@ -66,5 +67,8 @@ def undo_run(run_id: str, config: Config) -> list[str]:
             continue
         move_path(entry.target, entry.source)
         messages.append(f"restored {entry.target} -> {entry.source}")
+        # An undo is a negative example for the feedback loop (PLAN.md
+        # section 6, bullet 2): a human decided this verdict was wrong.
+        feedback.record_correction(entry.run_id, entry.source, "undone", config)
 
     return messages

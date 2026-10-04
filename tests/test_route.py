@@ -27,6 +27,7 @@ def test_builtin_image_routing(tmp_path: Path) -> None:
     verdict = route(build_evidence(path), Config())
     assert verdict.category == "Images"
     assert verdict.confidence == 1.0
+    assert verdict.source == "rule"
 
 
 def test_builtin_note_vs_code_file(tmp_path: Path) -> None:
@@ -148,6 +149,7 @@ def test_resolve_falls_back_to_the_llm_when_no_rule_matches(
     assert reason is None
     assert verdict.category == "Documents"
     assert verdict.confidence == 0.8
+    assert verdict.source == "llm"
 
 
 def test_resolve_holds_with_the_llm_error_when_unreachable(tmp_path: Path) -> None:

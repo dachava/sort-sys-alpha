@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from pydantic import ValidationError
 
 from ..config import Config
+from ..feedback import recent_accepted_examples
 from ..identify.types import Evidence
 from .prompts import build_system_prompt, build_user_message
 from .schema import RESPONSE_JSON_SCHEMA, LlmVerdict
@@ -70,10 +71,11 @@ class OllamaBackend:
     """
 
     def classify(self, evidence: Evidence, config: Config) -> LlmVerdict:
+        system_prompt = build_system_prompt(config, recent_accepted_examples(config))
         body = {
             "model": config.model.ollama.name,
             "messages": [
-                {"role": "system", "content": build_system_prompt(config)},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": build_user_message(evidence)},
             ],
             "format": RESPONSE_JSON_SCHEMA,
@@ -95,10 +97,11 @@ class OpenAICompatBackend:
     """Lemonade's OpenAI-compatible `/chat/completions`."""
 
     def classify(self, evidence: Evidence, config: Config) -> LlmVerdict:
+        system_prompt = build_system_prompt(config, recent_accepted_examples(config))
         body = {
             "model": config.model.lemonade.name,
             "messages": [
-                {"role": "system", "content": build_system_prompt(config)},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": build_user_message(evidence)},
             ],
             "response_format": {

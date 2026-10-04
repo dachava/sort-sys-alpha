@@ -8,13 +8,17 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import Config
+from .config import STATE_DIR_NAME, Config
 from .groups import detect_groups
 from .items import ScanItem
 from .subfolders import process_subfolder
 
 PARTIAL_SUFFIXES = {".crdownload", ".part", ".tmp", ".opdownload"}
-STATE_DIR_NAME = ".sort-sys-alpha"
+
+# Re-exported for existing callers (journal.py, plan.py, cli.py) -- the
+# constant itself now lives in config.py so feedback.py can use it without
+# importing through scan.py's route.py -> llm/ -> feedback.py chain.
+__all__ = ["STATE_DIR_NAME", "ScanResult", "SkippedItem", "is_locked", "scan"]
 
 
 @dataclass(frozen=True)

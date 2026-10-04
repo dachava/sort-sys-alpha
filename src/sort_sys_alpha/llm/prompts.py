@@ -1,18 +1,16 @@
 """Versioned system/user prompt templates for the LLM tier. See PLAN.md
 section 4.5: "system prompt (rules, folder allowlist, naming style, a few
-recent accepted examples) + evidence JSON".
-
-Few-shot examples from accepted history are M5/M6 scope (the feedback loop
-needs `routing.jsonl` history, which doesn't exist yet) -- the prompt here
-is allowlist + naming style only. `PROMPT_VERSION` exists so routing.jsonl
-(once it's written) can record which prompt produced a given verdict.
+recent accepted examples) + evidence JSON". `PROMPT_VERSION` lets
+routing.jsonl (feedback.py) record which prompt produced a given verdict.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 
 from ..config import Config
+from ..feedback import RoutingEntry
 from ..identify.types import Evidence
 
 PROMPT_VERSION = "v1"
@@ -32,9 +30,21 @@ If you can't confidently classify the file, set "confidence" below 0.5 and \
 explain why in "reason" rather than guessing."""
 
 
-def build_system_prompt(config: Config) -> str:
+def build_system_prompt(config: Config, examples: Sequence[RoutingEntry] = ()) -> str:
     categories = ", ".join(sorted(config.resolved_folder_allowlist()))
-    return _SYSTEM_TEMPLATE.format(categories=categories)
+    prompt = _SYSTEM_TEMPLATE.format(categories=categories)
+    if examples:
+        prompt += "\n\n" + _render_examples(examples)
+    return prompt
+
+
+def _render_examples(examples: Sequence[RoutingEntry]) -> str:
+    lines = ["Recent accepted examples -- evidence, then the verdict that was kept:"]
+    for example in examples:
+        evidence_json = json.dumps(example.evidence, default=str)
+        verdict_json = json.dumps({"category": example.category, "name": example.name})
+        lines.append(f"- {evidence_json} -> {verdict_json}")
+    return "\n".join(lines)
 
 
 def build_user_message(evidence: Evidence) -> str:

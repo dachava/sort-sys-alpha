@@ -1,0 +1,5 @@
+2024-03-01 10:22:03 INFO service started, listening on port 8080
+2024-03-01 10:22:05 ERROR connection refused from upstream db host
+2024-03-01 10:22:06 WARN retrying upstream connection, attempt 1
+2024-03-01 10:22:09 INFO upstream connection established
+2024-03-01 10:23:41 DEBUG handled request GET /healthz in 3ms

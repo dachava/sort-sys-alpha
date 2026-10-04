@@ -34,10 +34,33 @@ def test_subcommands_registered() -> None:
         assert command in result.output
 
 
-def test_unimplemented_command_exits_nonzero() -> None:
-    result = runner.invoke(app, ["eval"])
-    assert result.exit_code == 1
-    assert "M5" in result.output
+def test_eval_reports_accuracy(tmp_path: Path, fake_llm_server) -> None:
+    evals_dir = tmp_path / "evals"
+    evals_dir.mkdir()
+    (evals_dir / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    (evals_dir / "manifest.toml").write_text(
+        '[[case]]\nfile = "mystery.xyz123"\nexpected_category = "Documents"\n'
+    )
+    fake_llm_server.set_ollama_reply(
+        '{"kind": "manual", "category": "Documents", "name": "a-mystery-file", '
+        '"confidence": 0.9, "reason": "looks like a document"}'
+    )
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[model.ollama]",
+                f'base_url = "{fake_llm_server.base_url}"',
+                "",
+            ]
+        )
+    )
+
+    result = runner.invoke(
+        app, ["eval", "--config", str(config_path), "--evals-dir", str(evals_dir)]
+    )
+    assert result.exit_code == 0
+    assert "overall: 1/1" in result.output
 
 
 def test_scan_on_empty_source(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ actually calls.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from .config import Config, Rule
 from .identify.audio_video import AUDIO_EXTENSIONS
@@ -33,6 +34,10 @@ class RouteVerdict:
     reason: str
     name_hint: str | None = None
     suggest_delete: bool = False
+    # "llm" is the only source the feedback loop (feedback.py) records --
+    # rule verdicts are deterministic and confidence 1.0, so there's nothing
+    # for the model to learn from them.
+    source: Literal["rule", "llm"] = "rule"
 
 
 def _rule_matches(rule: Rule, evidence: Evidence) -> bool:
@@ -144,6 +149,7 @@ def resolve(
             llm_verdict.reason,
             llm_verdict.name,
             llm_verdict.suggest_delete,
+            source="llm",
         ),
         None,
     )

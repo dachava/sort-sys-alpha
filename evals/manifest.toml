@@ -1,0 +1,33 @@
+# The labeled fixture set `sort-sys-alpha eval` runs (PLAN.md section 6).
+#
+# Each [[case]] is one fixture file (relative to this directory) plus the
+# category a human says it belongs in. Fixtures are deliberately named with
+# extensions the rules tier doesn't recognize (.dat/.bin instead of
+# .txt/.log), so they only ever reach the LLM tier -- the whole point is
+# comparing *models*, not re-testing the rules tier. `eval` reports
+# `tier: rule` if a fixture stops dodging the rules tier (e.g. after a new
+# rule is added); rename the fixture if that happens.
+#
+# These five are a scaffold -- replace or extend them with your own
+# anonymized, ambiguous Downloads files as real ones turn up (never commit
+# real personal files; scrub names/identifying details first).
+
+[[case]]
+file = "fixtures/xj4920.dat"
+expected_category = "Documents/Notes"
+
+[[case]]
+file = "fixtures/rpt_q3_final.bin"
+expected_category = "Documents"
+
+[[case]]
+file = "fixtures/svc_trace.dat"
+expected_category = "Documents/Logs"
+
+[[case]]
+file = "fixtures/warranty_card.bin"
+expected_category = "Documents"
+
+[[case]]
+file = "fixtures/misc_export.bin"
+expected_category = "Other"

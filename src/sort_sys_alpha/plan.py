@@ -11,10 +11,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from . import feedback
 from .config import Config
 from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
 from .items import FileItem, FolderUnit, ScanItem
+from .llm.prompts import PROMPT_VERSION
 from .route import resolve
 from .scan import STATE_DIR_NAME, scan
 
@@ -96,6 +98,21 @@ def build_plan(config: Config, *, run_id: str | None = None) -> Plan:
         evidence = identify_item(item)
         verdict, unresolved_reason = resolve(item, evidence, config)
         decision = gate_item(item, evidence, verdict, config, unresolved_reason=unresolved_reason)
+
+        if verdict is not None and verdict.source == "llm":
+            feedback.record_verdict(
+                run_id=run_id,
+                move_root=_move_root(item),
+                evidence=evidence,
+                category=verdict.category,
+                name=verdict.name_hint or "",
+                confidence=verdict.confidence,
+                reason=verdict.reason,
+                suggest_delete=verdict.suggest_delete,
+                outcome="moved" if isinstance(decision, MoveDecision) else "held",
+                prompt_version=PROMPT_VERSION,
+                config=config,
+            )
 
         sources = _item_sources(item)
         if isinstance(decision, MoveDecision):

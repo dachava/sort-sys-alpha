@@ -9,11 +9,11 @@ See [`PLAN.md`](PLAN.md) for the full design and milestones, and
 
 ## Status
 
-M4 landed: scan, identify, rules + LLM routing, gate, plan/apply/undo,
-subfolder handling, and the scheduled `run` command (auto/plan modes +
-toast notifications) are all implemented. See PLAN.md section 10 for what's
-still ahead (feedback loop, eval, vision, ROM DAT matching, naming
-templates).
+M5 landed: scan, identify, rules + LLM routing, gate, plan/apply/undo,
+subfolder handling, the scheduled `run` command (auto/plan modes + toast
+notifications), and the feedback loop (`routing.jsonl`, few-shot examples,
+plan-edit/undo corrections, `eval`) are all implemented. See PLAN.md section
+10 for what's still ahead (vision, ROM DAT matching, naming templates).
 
 ## Development
 

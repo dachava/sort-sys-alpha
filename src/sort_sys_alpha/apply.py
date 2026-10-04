@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import feedback
 from .config import Config
 from .journal import append_entry
 from .movefs import MoveVerificationError, move_path, unique_target
@@ -43,6 +44,18 @@ def _is_effectively_empty(path: Path) -> bool:
 def apply_plan(plan: Plan, config: Config) -> ApplyResult:
     moved: list[tuple[Path, Path]] = []
     held: list[tuple[Path, str]] = []
+
+    # A hand-edit to plan.json's category before `apply` runs is a human
+    # correction to the model's verdict (PLAN.md section 6, bullet 2) --
+    # worth feeding back as a few-shot example. Name-only edits aren't
+    # tracked here: that's a naming-template concern (M8), not a routing one.
+    original_categories = feedback.original_categories(plan.run_id, config)
+    for move in plan.moves:
+        original_category = original_categories.get(move.move_root)
+        if original_category is not None and original_category != move.category:
+            feedback.record_correction(
+                plan.run_id, move.move_root, "corrected", config, category=move.category
+            )
 
     for move in plan.moves:
         if _is_stale(move):
