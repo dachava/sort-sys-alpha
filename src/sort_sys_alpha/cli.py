@@ -38,7 +38,7 @@ def apply(
 
 @app.command()
 def run() -> None:
-    """Plan + gate, then notify; apply stays a manual step (what the scheduled task calls)."""
+    """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
     _not_implemented("run", "M3")
 
 

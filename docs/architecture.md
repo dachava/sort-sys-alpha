@@ -10,7 +10,7 @@ scan.py ─► identify/ ─► route.py ─► (rules | llm/) ─► gate.py �
 
 | Module | Responsibility | Milestone |
 |---|---|---|
-| `config.py` | Load and validate `config.toml`; enforce the local-only model guard | M0 |
+| `config.py` | Load and validate `config.toml`; enforce the local-only model guard for whichever backend (Ollama/Lemonade) is active | M0 |
 | `cli.py` | `scan`, `plan`, `apply`, `run`, `undo`, `eval`, `doctor` | M0 (stubs) |
 | `scan.py` | Walk the source folder, skip partials/locked/recent files | M1 |
 | `identify/` | One evidence-extractor plugin per file type | M1 |

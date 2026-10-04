@@ -1,7 +1,8 @@
 # ADR 0002: Destination layout and scheduled-run behavior
 
 ## Status
-Accepted.
+Decision 1 (destination) accepted. Decision 2 (scheduled behavior) superseded
+by [ADR 0003](0003-schedule-mode-is-configurable.md).
 
 ## Context
 PLAN.md section 11 left two open decisions that affect the config schema and
@@ -24,8 +25,6 @@ the `run` command's default behavior:
 
 ## Consequences
 - `config.py`'s default `dest` is `~/Downloads/_Filed` (see PLAN.md section 7).
-- The `run` command (M3) composes `plan` + the gate, but does not call
-  `apply` automatically; the scheduled task registered in M4 calls `run`
-  (plan-only) rather than an auto-apply path.
-- Both decisions can be revisited once there's real usage data — nothing here
-  prevents adding an opt-in auto-apply mode later behind its own config flag.
+- Decision 2 held only through the initial M0 scaffold. See ADR 0003 for why
+  it changed to a config-selectable `auto`/`plan` mode instead of a fixed
+  plan-only behavior, and what that means for `run` and the scheduled task.
