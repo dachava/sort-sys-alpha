@@ -9,7 +9,11 @@ See [`PLAN.md`](PLAN.md) for the full design and milestones, and
 
 ## Status
 
-Planning / early scaffolding (M0). Nothing here moves files yet.
+M4 landed: scan, identify, rules + LLM routing, gate, plan/apply/undo,
+subfolder handling, and the scheduled `run` command (auto/plan modes +
+toast notifications) are all implemented. See PLAN.md section 10 for what's
+still ahead (feedback loop, eval, vision, ROM DAT matching, naming
+templates).
 
 ## Development
 

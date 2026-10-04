@@ -25,7 +25,7 @@ The scheduled run's behavior is a config choice, not a fixed one:
 ## Consequences
 - `config.py`'s `ScheduleConfig` holds `mode` and `notify`; `Config` has no
   single fixed scheduled behavior.
-- `run` (M3) must branch on `schedule.mode` rather than always stopping after
+- `run` (M4) must branch on `schedule.mode` rather than always stopping after
   `plan` — PLAN.md section 5 describes it as "plan + apply with gates (what
   the scheduler calls)" again, with the gate being what makes `auto` safe,
   not the absence of an apply step.

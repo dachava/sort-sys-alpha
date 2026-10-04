@@ -35,9 +35,9 @@ def test_subcommands_registered() -> None:
 
 
 def test_unimplemented_command_exits_nonzero() -> None:
-    result = runner.invoke(app, ["run"])
+    result = runner.invoke(app, ["eval"])
     assert result.exit_code == 1
-    assert "M4" in result.output
+    assert "M5" in result.output
 
 
 def test_scan_on_empty_source(tmp_path: Path) -> None:
@@ -73,6 +73,31 @@ def test_plan_writes_plan_and_report(tmp_path: Path) -> None:
     assert (source / "_Filed" / ".sort-sys-alpha" / "plan.json").exists()
     assert (source / "_Filed" / ".sort-sys-alpha" / "report.md").exists()
     assert (source / "notes.txt").exists()  # plan never touches source
+
+
+def test_run_in_plan_mode_never_touches_source(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    (source / "notes.txt").write_text("hello\n")
+    config_path = _write_config(tmp_path, source, schedule='{ mode = "plan", notify = false }')
+
+    result = runner.invoke(app, ["run", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "1 ready to review" in result.output
+    assert (source / "notes.txt").exists()
+    assert (source / "_Filed" / ".sort-sys-alpha" / "plan.json").exists()
+
+
+def test_run_in_auto_mode_moves_files(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    (source / "notes.txt").write_text("hello\n")
+    config_path = _write_config(tmp_path, source, schedule='{ mode = "auto", notify = false }')
+
+    result = runner.invoke(app, ["run", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "moved 1, held 0" in result.output
+    assert not (source / "notes.txt").exists()
 
 
 def test_apply_without_a_plan_fails_cleanly(tmp_path: Path) -> None:

@@ -11,6 +11,7 @@ from .config import load_config
 from .identify import identify_item
 from .journal import last_run_id, undo_run
 from .llm.backend import describe_backend
+from .notify import notify
 from .plan import PLAN_FILENAME, build_plan, load_plan, write_plan
 from .scan import STATE_DIR_NAME
 from .scan import scan as run_scan
@@ -76,9 +77,36 @@ def apply(
 
 
 @app.command()
-def run() -> None:
+def run(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+) -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
-    _not_implemented("run", "M4")
+    config = load_config(config_path)
+    the_plan = build_plan(config)
+    plan_path, report_path = write_plan(the_plan, config)
+
+    if config.schedule.mode == "plan":
+        typer.echo(f"{len(the_plan.moves)} ready to review.")
+        typer.echo(f"plan: {plan_path}")
+        typer.echo(f"report: {report_path}")
+        if config.schedule.notify:
+            notify("sort-sys-alpha", f"{len(the_plan.moves)} files ready to review")
+        return
+
+    result = apply_plan(the_plan, config)
+    typer.echo(f"moved {len(result.moved)}, held {len(result.held)}.")
+    for folder in result.emptied_folders:
+        typer.echo(f"# left empty, not deleted: {folder}", err=True)
+
+    if config.schedule.notify:
+        moved_roots = {root for root, _ in result.moved}
+        suggested = sum(
+            1 for move in the_plan.moves if move.suggest_delete and move.move_root in moved_roots
+        )
+        summary = f"moved {len(result.moved)}, held {len(result.held)}"
+        if suggested:
+            summary += f", {suggested} suggested for deletion"
+        notify("sort-sys-alpha", summary)
 
 
 @app.command()

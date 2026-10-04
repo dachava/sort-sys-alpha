@@ -11,7 +11,7 @@ scan.py ─► subfolders.py ─► identify/ ─► route.py ─► (rules | ll
 | Module | Responsibility | Milestone |
 |---|---|---|
 | `config.py` | Load and validate `config.toml`; enforce the local-only model guard for whichever backend (Ollama/Lemonade) is active | M0 |
-| `cli.py` | `scan`, `plan`, `apply`, `run`, `undo`, `eval`, `doctor` | M0 (stubs) → M1/M2 (scan/plan/apply/undo) → M3 (doctor) |
+| `cli.py` | `scan`, `plan`, `apply`, `run`, `undo`, `eval`, `doctor` | M0 (stubs) → M1/M2 (scan/plan/apply/undo) → M3 (doctor) → M4 (`run`) |
 | `scan.py` | Walk the top level of the source folder, skip partials/locked/recent/hidden files | M1 |
 | `groups.py` / `items.py` | File groups and folder units that move as one unit (cue/bin, gdi, m3u, ccd; extracted apps, albums, disc dumps, single-type folders) | M1 / M2 |
 | `identify/` | One evidence-extractor plugin per file type, plus ROM headers and ISO9660 disc detection | M1 |
@@ -24,6 +24,8 @@ scan.py ─► subfolders.py ─► identify/ ─► route.py ─► (rules | ll
 | `plan.py` | Build `plan.json` + `report.md`, append to `held.log` | M2 |
 | `apply.py` | Execute a plan: move/copy, collision handling, staleness re-check, empty-folder reporting | M2 |
 | `journal.py` | `journal.jsonl` and `undo` | M2 |
+| `notify.py` | Best-effort toast notification after `run`; no-op off Windows | M4 |
+| `scripts/windows/` | `install.ps1` (uv + default config), `register-task.ps1` (idle-gated weekly Scheduled Task), `notify.ps1` (the actual toast, shelled out to from `notify.py`) | M4 |
 
 Decisions with rationale (destination layout, scheduled-run behavior, etc.) are
 recorded as ADRs in [`adr/`](adr/).
