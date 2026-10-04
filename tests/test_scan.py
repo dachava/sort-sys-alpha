@@ -30,6 +30,22 @@ def test_picks_up_a_plain_file(tmp_path: Path) -> None:
     assert result.skipped == []
 
 
+def test_min_age_zero_never_holds_on_the_boundary(tmp_path: Path) -> None:
+    # min_age_minutes=0 means "no minimum age" — a file timestamped exactly
+    # "now" (or even microseconds into the future, as a clock-skewed
+    # filesystem might report) must never be held for being "too recent".
+    # A plain `st_mtime > cutoff` comparison is a race at this exact
+    # boundary; this pins the fix rather than relying on timing luck.
+    config = _config(tmp_path, min_age_minutes=0)
+    path = config.source / "notes.txt"
+    path.write_text("hi")
+    _age(path, minutes_ago=-0.01)  # 0.6s into the future
+
+    result = scan(config)
+    assert result.items == [FileItem(path=path)]
+    assert result.skipped == []
+
+
 def test_skips_partial_downloads(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "movie.mp4.crdownload").write_bytes(b"\x00")

@@ -89,7 +89,13 @@ def scan(config: Config) -> ScanResult:
             skipped.append(SkippedItem(path, "unreadable"))
             continue
 
-        if st.st_mtime > cutoff:
+        # A plain `st_mtime > cutoff` check is a race at the boundary even on
+        # one OS (the file was just written, "now" from two time.time() /
+        # stat() calls microseconds apart isn't guaranteed ordered) and
+        # proved flaky on Windows CI. min_age_minutes <= 0 means "no minimum
+        # age", so skip the comparison entirely rather than relying on which
+        # side of a razor-thin boundary the clock lands on.
+        if config.min_age_minutes > 0 and st.st_mtime > cutoff:
             skipped.append(SkippedItem(path, "modified too recently"))
             continue
 
