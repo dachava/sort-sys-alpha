@@ -56,7 +56,7 @@ class LemonadeConfig(BaseModel):
 class ModelConfig(BaseModel):
     backend: Literal["ollama", "lemonade"] = "ollama"
     vision: Literal["auto"] | bool = "auto"
-    timeout_s: int = 120
+    timeout_s: float = 120.0
     allow_remote: bool = False
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     lemonade: LemonadeConfig = Field(default_factory=LemonadeConfig)

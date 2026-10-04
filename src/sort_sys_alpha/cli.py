@@ -10,6 +10,7 @@ from .apply import apply_plan
 from .config import load_config
 from .identify import identify_item
 from .journal import last_run_id, undo_run
+from .llm.backend import describe_backend
 from .plan import PLAN_FILENAME, build_plan, load_plan, write_plan
 from .scan import STATE_DIR_NAME
 from .scan import scan as run_scan
@@ -77,7 +78,7 @@ def apply(
 @app.command()
 def run() -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
-    _not_implemented("run", "M3")
+    _not_implemented("run", "M4")
 
 
 @app.command()
@@ -103,9 +104,17 @@ def eval_() -> None:
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+) -> None:
     """Check model server, config, and permissions."""
-    _not_implemented("doctor", "M3")
+    config = load_config(config_path)
+
+    typer.echo(f"source: {'OK' if config.source.is_dir() else 'NOT FOUND'} ({config.source})")
+    typer.echo(f"dest: {config.dest}")
+
+    for line in describe_backend(config):
+        typer.echo(line)
 
 
 def main() -> None:

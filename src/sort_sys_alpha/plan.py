@@ -15,7 +15,7 @@ from .config import Config
 from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
 from .items import FileItem, FolderUnit, ScanItem
-from .route import RouteVerdict, route
+from .route import resolve
 from .scan import STATE_DIR_NAME, scan
 
 PLAN_FILENAME = "plan.json"
@@ -33,6 +33,7 @@ class PlanMove(BaseModel):
     reason: str
     size: int
     mtime: float
+    suggest_delete: bool = False
 
 
 class PlanHold(BaseModel):
@@ -69,12 +70,6 @@ def _move_root(item: ScanItem) -> Path:
     )
 
 
-def _verdict_for(item: ScanItem, evidence, config: Config) -> RouteVerdict | None:
-    if isinstance(item, FolderUnit):
-        return RouteVerdict(item.category, 1.0, item.reason)
-    return route(evidence, config)
-
-
 def _size_and_mtime(item: ScanItem) -> tuple[int, float]:
     """Staleness baseline for apply-time re-checking (PLAN.md section 4.6).
 
@@ -99,8 +94,8 @@ def build_plan(config: Config, *, run_id: str | None = None) -> Plan:
 
     for item in scan_result.items:
         evidence = identify_item(item)
-        verdict = _verdict_for(item, evidence, config)
-        decision = gate_item(item, evidence, verdict, config)
+        verdict, unresolved_reason = resolve(item, evidence, config)
+        decision = gate_item(item, evidence, verdict, config, unresolved_reason=unresolved_reason)
 
         sources = _item_sources(item)
         if isinstance(decision, MoveDecision):
@@ -116,6 +111,7 @@ def build_plan(config: Config, *, run_id: str | None = None) -> Plan:
                     reason=decision.reason,
                     size=size,
                     mtime=mtime,
+                    suggest_delete=decision.suggest_delete,
                 )
             )
         elif isinstance(decision, HoldDecision):
@@ -153,7 +149,8 @@ def render_report(plan: Plan) -> str:
     ]
     for move in plan.moves:
         sources = ", ".join(f"`{s}`" for s in move.sources)
-        lines.append(f"- {sources} -> `{move.target}` ({move.category}, {move.reason})")
+        note = " **[model suggests deleting after review]**" if move.suggest_delete else ""
+        lines.append(f"- {sources} -> `{move.target}` ({move.category}, {move.reason}){note}")
 
     lines += ["", f"## Held ({len(plan.holds)})", ""]
     for hold in plan.holds:

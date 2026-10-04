@@ -37,7 +37,7 @@ def test_subcommands_registered() -> None:
 def test_unimplemented_command_exits_nonzero() -> None:
     result = runner.invoke(app, ["run"])
     assert result.exit_code == 1
-    assert "M3" in result.output
+    assert "M4" in result.output
 
 
 def test_scan_on_empty_source(tmp_path: Path) -> None:
@@ -103,6 +103,29 @@ def test_plan_then_apply_then_undo(tmp_path: Path) -> None:
     assert undo_result.exit_code == 0
     assert "restored" in undo_result.output
     assert (source / "notes.txt").exists()
+
+
+def test_doctor_reports_backend_reachability(tmp_path: Path, fake_llm_server) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                f'source = "{source.as_posix()}"',
+                f'dest = "{(source / "_Filed").as_posix()}"',
+                "[model.ollama]",
+                f'base_url = "{fake_llm_server.base_url}"',
+                "",
+            ]
+        )
+    )
+    fake_llm_server.set_raw_reply({"models": []})
+
+    result = runner.invoke(app, ["doctor", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "source: OK" in result.output
+    assert "reachable" in result.output
 
 
 def test_undo_with_no_runs_fails_cleanly(tmp_path: Path) -> None:

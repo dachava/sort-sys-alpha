@@ -24,6 +24,33 @@ def test_no_verdict_is_held(tmp_path: Path) -> None:
     assert "no matching rule" in decision.reason
 
 
+def test_unresolved_reason_overrides_the_default_message(tmp_path: Path) -> None:
+    path = tmp_path / "mystery.bin"
+    path.write_bytes(b"\x00")
+    evidence = build_evidence(path)
+
+    decision = gate_item(
+        FileItem(path),
+        evidence,
+        None,
+        _config(tmp_path),
+        unresolved_reason="model unreachable at http://localhost:11434",
+    )
+    assert isinstance(decision, HoldDecision)
+    assert decision.reason == "model unreachable at http://localhost:11434"
+
+
+def test_suggest_delete_passes_through_to_the_move_decision(tmp_path: Path) -> None:
+    path = tmp_path / "notes.txt"
+    path.write_text("hi")
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("Documents/Notes", 0.9, "model verdict", suggest_delete=True)
+
+    decision = gate_item(FileItem(path), evidence, verdict, _config(tmp_path))
+    assert isinstance(decision, MoveDecision)
+    assert decision.suggest_delete is True
+
+
 def test_low_confidence_is_held(tmp_path: Path) -> None:
     path = tmp_path / "photo.txt"
     path.write_text("hi")

@@ -1,10 +1,10 @@
-"""Routing: rules tier first, LLM tier (M3) for everything else.
-See PLAN.md section 4.4.
+"""Routing: rules tier first, LLM tier for everything else. See PLAN.md
+section 4.4.
 
-A verdict with no model call ever has confidence 1.0 — it's either a
-deterministic match or it doesn't happen. Anything `route()` can't place
-returns None, and the gate holds it with "no matching rule" until the LLM
-tier exists.
+A rule-tier verdict always has confidence 1.0 -- it's either a deterministic
+match or it doesn't happen. `route()` (rules only) returns None for anything
+it can't place; `resolve()` is the full tier-1-then-tier-2 pipeline plan.py
+actually calls.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from .config import Config, Rule
 from .identify.audio_video import AUDIO_EXTENSIONS
 from .identify.types import Evidence
+from .items import FileGroup, FolderUnit, ScanItem
+from .llm.backend import LlmError, backend_for
 
 # NES/GB/GBC/GBA/N64/Genesis are verified against a header signature;
 # SNES/NDS have no cheap signature (see identify/roms.py), so their
@@ -30,6 +32,7 @@ class RouteVerdict:
     confidence: float
     reason: str
     name_hint: str | None = None
+    suggest_delete: bool = False
 
 
 def _rule_matches(rule: Rule, evidence: Evidence) -> bool:
@@ -106,3 +109,41 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
 
 def route(evidence: Evidence, config: Config) -> RouteVerdict | None:
     return _user_rules(evidence, config) or _builtin_rules(evidence, config)
+
+
+def resolve(
+    item: ScanItem, evidence: Evidence, config: Config
+) -> tuple[RouteVerdict | None, str | None]:
+    """The full pipeline: rules tier, then the LLM tier for whatever rules
+    can't place (PLAN.md 4.4). Returns `(verdict, reason)` -- `reason` is only
+    set when `verdict` is None, to explain *why* beyond the generic "no
+    matching rule" (for example, the model was unreachable).
+
+    `FileGroup` items skip the LLM tier: `apply()` has no support for moving
+    a `FileGroup` as a unit (see `plan._move_root`), so a confident model
+    verdict for one would crash rather than hold. `FolderUnit` items already
+    carry a category from `subfolders.classify_subfolder` and never reach
+    either tier here.
+    """
+    if isinstance(item, FolderUnit):
+        return RouteVerdict(item.category, 1.0, item.reason), None
+
+    verdict = route(evidence, config)
+    if verdict is not None or isinstance(item, FileGroup):
+        return verdict, None
+
+    try:
+        llm_verdict = backend_for(config).classify(evidence, config)
+    except LlmError as e:
+        return None, str(e)
+
+    return (
+        RouteVerdict(
+            llm_verdict.category,
+            llm_verdict.confidence,
+            llm_verdict.reason,
+            llm_verdict.name,
+            llm_verdict.suggest_delete,
+        ),
+        None,
+    )

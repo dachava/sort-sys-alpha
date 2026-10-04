@@ -25,6 +25,7 @@ class MoveDecision:
     target: Path
     confidence: float
     reason: str
+    suggest_delete: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,10 +43,15 @@ def _target_extension(item: ScanItem, evidence: Evidence) -> str:
 
 
 def gate_item(
-    item: ScanItem, evidence: Evidence, verdict: RouteVerdict | None, config: Config
+    item: ScanItem,
+    evidence: Evidence,
+    verdict: RouteVerdict | None,
+    config: Config,
+    *,
+    unresolved_reason: str | None = None,
 ) -> GateDecision:
     if verdict is None:
-        return HoldDecision(item, evidence, "no matching rule (LLM tier is M3)")
+        return HoldDecision(item, evidence, unresolved_reason or "no matching rule")
 
     if verdict.confidence < config.confidence_min:
         reason = f"confidence {verdict.confidence} < {config.confidence_min}"
@@ -72,5 +78,12 @@ def gate_item(
         return HoldDecision(item, evidence, "target path would escape the destination root")
 
     return MoveDecision(
-        item, evidence, verdict.category, full_name, target, verdict.confidence, verdict.reason
+        item,
+        evidence,
+        verdict.category,
+        full_name,
+        target,
+        verdict.confidence,
+        verdict.reason,
+        suggest_delete=verdict.suggest_delete,
     )

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from sort_sys_alpha.config import Config
@@ -22,6 +23,44 @@ def test_build_plan_separates_moves_and_holds(tmp_path: Path) -> None:
     assert len(the_plan.moves) == 1
     assert the_plan.moves[0].category == "Documents/Notes"
     assert len(the_plan.holds) == 1
+
+
+def test_build_plan_holds_with_model_unreachable_reason(tmp_path: Path) -> None:
+    config = _config(tmp_path)  # default backend/base_url, nothing listening
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+
+    the_plan = build_plan(config)
+    assert len(the_plan.holds) == 1
+    assert "unreachable" in the_plan.holds[0].reason
+
+
+def test_build_plan_routes_a_rule_miss_through_the_llm(tmp_path: Path, fake_llm_server) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+    )
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.9,
+                "reason": "looks like a document",
+                "suggest_delete": True,
+            }
+        )
+    )
+
+    the_plan = build_plan(config)
+    assert len(the_plan.moves) == 1
+    move = the_plan.moves[0]
+    assert move.category == "Documents"
+    assert move.suggest_delete is True
+
+    report = render_report(the_plan)
+    assert "model suggests deleting" in report
 
 
 def test_build_plan_includes_scan_skips_as_holds(tmp_path: Path) -> None:
