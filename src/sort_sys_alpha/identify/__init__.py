@@ -76,6 +76,19 @@ def identify_item(item: _items.ScanItem) -> Evidence:
     if isinstance(item, _items.FileItem):
         return build_evidence(item.path)
 
+    if isinstance(item, _items.FolderUnit):
+        base = stats.get_stats(item.root)
+        evidence = Evidence(path=item.root, **base)
+        evidence.kind = "folder_unit"
+        evidence.details = {
+            "category": item.category,
+            "classification_reason": item.reason,
+            "members": [str(p) for p in item.members],
+            "member_count": len(item.members),
+            "total_size": sum(p.stat().st_size for p in item.members if p.exists()),
+        }
+        return evidence
+
     base = stats.get_stats(item.primary)
     evidence = Evidence(path=item.primary, true_type=magic.get_true_type(item.primary), **base)
     evidence.kind = "disc_group"

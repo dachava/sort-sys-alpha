@@ -6,8 +6,12 @@ from pathlib import Path
 
 import typer
 
+from .apply import apply_plan
 from .config import load_config
 from .identify import identify_item
+from .journal import last_run_id, undo_run
+from .plan import PLAN_FILENAME, build_plan, load_plan, write_plan
+from .scan import STATE_DIR_NAME
 from .scan import scan as run_scan
 
 app = typer.Typer(
@@ -39,17 +43,35 @@ def scan(
 
 
 @app.command()
-def plan() -> None:
+def plan(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+) -> None:
     """Produce plan.json + report.md."""
-    _not_implemented("plan", "M2")
+    config = load_config(config_path)
+    the_plan = build_plan(config)
+    plan_path, report_path = write_plan(the_plan, config)
+    typer.echo(f"{len(the_plan.moves)} to move, {len(the_plan.holds)} held.")
+    typer.echo(f"plan: {plan_path}")
+    typer.echo(f"report: {report_path}")
 
 
 @app.command()
 def apply(
-    plan_file: str = typer.Option(None, "--plan", help="Path to a plan.json to execute."),
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    plan_file: Path | None = typer.Option(None, "--plan", help="Path to a plan.json to execute."),
 ) -> None:
     """Execute a plan."""
-    _not_implemented("apply", "M2")
+    config = load_config(config_path)
+    path = plan_file or (config.dest / STATE_DIR_NAME / PLAN_FILENAME)
+    if not path.exists():
+        typer.echo(f"no plan found at {path}; run `sort-sys-alpha plan` first.", err=True)
+        raise typer.Exit(code=1)
+
+    the_plan = load_plan(path)
+    result = apply_plan(the_plan, config)
+    typer.echo(f"moved {len(result.moved)}, held {len(result.held)}.")
+    for folder in result.emptied_folders:
+        typer.echo(f"# left empty, not deleted: {folder}", err=True)
 
 
 @app.command()
@@ -61,9 +83,17 @@ def run() -> None:
 @app.command()
 def undo(
     run_id: str = typer.Argument("last", help="Run id to undo, or 'last'."),
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
 ) -> None:
     """Undo a previous run via the move journal."""
-    _not_implemented("undo", "M2")
+    config = load_config(config_path)
+    resolved_id = last_run_id(config) if run_id == "last" else run_id
+    if resolved_id is None:
+        typer.echo("no runs in the journal yet.", err=True)
+        raise typer.Exit(code=1)
+
+    for message in undo_run(resolved_id, config):
+        typer.echo(message)
 
 
 @app.command(name="eval")

@@ -1,9 +1,5 @@
-"""Directory scan: find candidate files in the source folder.
-See PLAN.md section 4.1.
-
-Only scans the top level of `source`. Subfolder unit/grab-bag classification
-(PLAN.md section 4.2b) is M2 scope; for now every subfolder is reported as
-skipped rather than silently descended into or silently ignored.
+"""Directory scan: find candidate files in the source folder, and classify
+its subfolders. See PLAN.md sections 4.1 and 4.2b.
 """
 
 from __future__ import annotations
@@ -15,6 +11,7 @@ from pathlib import Path
 from .config import Config
 from .groups import detect_groups
 from .items import ScanItem
+from .subfolders import process_subfolder
 
 PARTIAL_SUFFIXES = {".crdownload", ".part", ".tmp", ".opdownload"}
 STATE_DIR_NAME = ".sort-sys-alpha"
@@ -30,6 +27,7 @@ class SkippedItem:
 class ScanResult:
     items: list[ScanItem]
     skipped: list[SkippedItem]
+    grab_bag_dirs: list[Path]
 
 
 def is_locked(path: Path) -> bool:
@@ -55,18 +53,26 @@ def scan(config: Config) -> ScanResult:
     cutoff = time.time() - config.min_age_minutes * 60
     skipped: list[SkippedItem] = []
     candidates: list[Path] = []
+    subfolder_items: list[ScanItem] = []
+    grab_bag_dirs: list[Path] = []
 
     try:
         entries = sorted(source.iterdir())
     except OSError:
-        return ScanResult(items=[], skipped=[])
+        return ScanResult(items=[], skipped=[], grab_bag_dirs=[])
 
     for path in entries:
         if path == config.dest:
             continue
 
         if path.is_dir():
-            skipped.append(SkippedItem(path, "subfolder (handled in a later milestone)"))
+            if _is_hidden(path):
+                skipped.append(SkippedItem(path, "hidden folder"))
+                continue
+            items, held, grab_bags = process_subfolder(path, config)
+            subfolder_items.extend(items)
+            skipped.extend(SkippedItem(p, reason) for p, reason in held)
+            grab_bag_dirs.extend(grab_bags)
             continue
 
         if _is_hidden(path):
@@ -93,4 +99,5 @@ def scan(config: Config) -> ScanResult:
 
         candidates.append(path)
 
-    return ScanResult(items=detect_groups(candidates), skipped=skipped)
+    items = detect_groups(candidates) + subfolder_items
+    return ScanResult(items=items, skipped=skipped, grab_bag_dirs=grab_bag_dirs)

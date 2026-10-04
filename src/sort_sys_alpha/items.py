@@ -20,4 +20,17 @@ class FileGroup:
     members: tuple[Path, ...]  # includes `primary`
 
 
-ScanItem = FileItem | FileGroup
+@dataclass(frozen=True)
+class FolderUnit:
+    """A subfolder classified as a coherent unit (PLAN.md section 4.2b):
+    it moves intact, as one directory, into `category` — already decided
+    by `subfolders.classify_subfolder`, not by the normal route() tier.
+    """
+
+    root: Path
+    category: str
+    reason: str
+    members: tuple[Path, ...]  # every file under root, recursively
+
+
+ScanItem = FileItem | FileGroup | FolderUnit

@@ -1,0 +1,187 @@
+"""Subfolder classification: unit / grab-bag / unsure. See PLAN.md section
+4.2b. Only the deterministic-marker path is implemented here — the model
+only gets involved (PLAN.md: "the model gets a listing... and only decides
+when markers don't settle it") once the LLM tier exists (M3); until then,
+a folder with no clear marker is a grab-bag (split), and genuinely
+conflicting signals are held as "unsure" rather than guessed at.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from .config import Config
+from .groups import detect_groups
+from .identify import build_evidence
+from .items import FolderUnit, ScanItem
+from .route import route
+
+CODE_PROJECT_MARKER_NAMES = {".git", "package.json", "pyproject.toml"}
+EXTRACTED_APP_MARKER_NAME = "setup.exe"
+ALBUM_AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".wav", ".m4a", ".aac", ".wma"}
+# ".cue" deliberately excluded: it pairs with either audio tracks (an album,
+# handled by _has_album_markers) or binary tracks (a disc dump) — treating it
+# as its own disc signal would flag every album as a conflicting "unsure".
+DISC_MARKER_EXTENSIONS = {".gdi", ".m3u", ".ccd", ".iso", ".bin", ".img"}
+DISC_IDENTIFY_EXTENSIONS = {".iso", ".cue", ".gdi", ".ccd"}
+
+
+@dataclass(frozen=True)
+class Classification:
+    verdict: str  # "unit" | "grab_bag" | "unsure" | "limit"
+    category: str | None
+    reason: str
+
+
+def _direct_entries(root: Path) -> list[Path]:
+    try:
+        return sorted(root.iterdir())
+    except OSError:
+        return []
+
+
+def _walk_file_count_and_depth(root: Path, max_depth: int) -> tuple[int, int]:
+    file_count = 0
+    deepest = 0
+    stack: list[tuple[Path, int]] = [(root, 0)]
+    while stack:
+        current, depth = stack.pop()
+        if depth > max_depth:
+            deepest = max(deepest, depth)
+            continue
+        for entry in _direct_entries(current):
+            if entry.is_dir():
+                stack.append((entry, depth + 1))
+            else:
+                file_count += 1
+                deepest = max(deepest, depth)
+    return file_count, deepest
+
+
+def _has_code_project_markers(entries: list[Path]) -> bool:
+    names = {p.name for p in entries}
+    if names & CODE_PROJECT_MARKER_NAMES:
+        return True
+    return any(p.is_file() and p.suffix.lower() == ".tf" for p in entries)
+
+
+def _has_extracted_app_markers(entries: list[Path]) -> bool:
+    files = [p for p in entries if p.is_file()]
+    if any(p.name.lower() == EXTRACTED_APP_MARKER_NAME for p in files):
+        return True
+    exts = {p.suffix.lower() for p in files}
+    return ".exe" in exts and ".dll" in exts
+
+
+def _has_album_markers(entries: list[Path]) -> bool:
+    exts = {p.suffix.lower() for p in entries if p.is_file()}
+    return bool(exts & ALBUM_AUDIO_EXTENSIONS) and ".cue" in exts
+
+
+def _has_disc_markers(entries: list[Path]) -> bool:
+    exts = {p.suffix.lower() for p in entries if p.is_file()}
+    return bool(exts & DISC_MARKER_EXTENSIONS)
+
+
+def _disc_console_category(entries: list[Path], config: Config) -> str | None:
+    for path in entries:
+        if path.is_file() and path.suffix.lower() in DISC_IDENTIFY_EXTENSIONS:
+            verdict = route(build_evidence(path), config)
+            if verdict is not None and verdict.category.startswith("ROMs/"):
+                return verdict.category
+    return None
+
+
+def _single_builtin_category(files: list[Path], config: Config) -> str | None:
+    if not files:
+        return None
+    categories = set()
+    for path in files:
+        verdict = route(build_evidence(path), config)
+        if verdict is None:
+            return None
+        categories.add(verdict.category)
+        if len(categories) > 1:
+            return None
+    return next(iter(categories))
+
+
+def classify_subfolder(root: Path, config: Config) -> Classification:
+    file_count, depth = _walk_file_count_and_depth(root, config.subfolders.max_depth)
+    if file_count > config.subfolders.max_files or depth > config.subfolders.max_depth:
+        return Classification("limit", None, "exceeds subfolder depth/size limits")
+
+    entries = _direct_entries(root)
+    if not entries:
+        return Classification("grab_bag", None, "empty folder")
+
+    signals: list[tuple[str, str]] = []
+    if _has_code_project_markers(entries):
+        signals.append(("Other", "code project markers"))
+    if _has_extracted_app_markers(entries):
+        signals.append(("Installers", "extracted app markers"))
+    if _has_album_markers(entries):
+        signals.append(("Audio", "album markers (audio + cue sheet)"))
+    if _has_disc_markers(entries):
+        console_category = _disc_console_category(entries, config)
+        if console_category:
+            signals.append((console_category, "disc/game dump, console identified"))
+        else:
+            return Classification("unsure", None, "disc/game dump, console not determined")
+
+    if len(signals) > 1:
+        reasons = ", ".join(reason for _category, reason in signals)
+        return Classification("unsure", None, f"conflicting markers: {reasons}")
+    if len(signals) == 1:
+        category, reason = signals[0]
+        return Classification("unit", category, reason)
+
+    files = [p for p in entries if p.is_file()]
+    has_subdirs = any(p.is_dir() for p in entries)
+    # Require >= 2 files: a single file trivially satisfies "only one type",
+    # but wrapping one lone file in a whole-folder move isn't what "a folder
+    # of only one type" (PLAN.md 4.2b) means — that's just a grab-bag of one.
+    if not has_subdirs and len(files) >= 2:
+        single_category = _single_builtin_category(files, config)
+        if single_category:
+            return Classification("unit", single_category, "single-type folder")
+
+    return Classification("grab_bag", None, "mixed contents, no project/app markers")
+
+
+def process_subfolder(
+    root: Path, config: Config
+) -> tuple[list[ScanItem], list[tuple[Path, str]], list[Path]]:
+    """Returns (items ready for identify/route/gate, (path, reason) whole-folder
+    holds, and every folder that was split as a grab-bag — the caller needs
+    that list to check post-apply whether any of them ended up empty, since
+    an emptied folder is reported as a suggested deletion, never removed).
+    """
+    classification = classify_subfolder(root, config)
+
+    if classification.verdict == "unit":
+        members = tuple(sorted(p for p in root.rglob("*") if p.is_file()))
+        unit = FolderUnit(root, classification.category, classification.reason, members)
+        return [unit], [], []
+
+    if classification.verdict in ("unsure", "limit"):
+        return [], [(root, classification.reason)], []
+
+    # grab_bag: split -- files become normal candidates, subfolders recurse.
+    items: list[ScanItem] = []
+    held: list[tuple[Path, str]] = []
+    grab_bag_dirs: list[Path] = [root]
+    entries = _direct_entries(root)
+
+    files = [p for p in entries if p.is_file() and not p.name.startswith(".")]
+    items.extend(detect_groups(files))
+
+    for entry in entries:
+        if entry.is_dir() and not entry.name.startswith("."):
+            sub_items, sub_held, sub_grab_bags = process_subfolder(entry, config)
+            items.extend(sub_items)
+            held.extend(sub_held)
+            grab_bag_dirs.extend(sub_grab_bags)
+
+    return items, held, grab_bag_dirs

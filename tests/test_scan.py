@@ -70,15 +70,29 @@ def test_skips_hidden_files(tmp_path: Path) -> None:
     assert result.skipped[0].reason == "hidden file"
 
 
-def test_subfolders_are_held_not_descended_into(tmp_path: Path) -> None:
+def test_a_unit_subfolder_becomes_one_folder_unit_item(tmp_path: Path) -> None:
     config = _config(tmp_path)
     sub = config.source / "extracted_app"
     sub.mkdir()
     (sub / "setup.exe").write_bytes(b"\x00")
 
     result = scan(config)
-    assert result.items == []
-    assert result.skipped == [SkippedItem(sub, "subfolder (handled in a later milestone)")]
+    assert len(result.items) == 1
+    assert result.items[0].root == sub
+    assert result.items[0].category == "Installers"
+    assert result.skipped == []
+
+
+def test_a_grab_bag_subfolder_is_split_into_its_files(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    sub = config.source / "misc"
+    sub.mkdir()
+    (sub / "a.txt").write_text("hi")
+    (sub / "b.jpg").write_bytes(b"\x00")
+
+    result = scan(config)
+    assert {i.path.name for i in result.items} == {"a.txt", "b.jpg"}
+    assert sub in result.grab_bag_dirs
 
 
 def test_dest_folder_itself_is_never_scanned(tmp_path: Path) -> None:
