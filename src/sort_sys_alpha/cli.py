@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
+
+from .config import load_config
+from .identify import identify_item
+from .scan import scan as run_scan
 
 app = typer.Typer(
     name="sort-sys-alpha",
@@ -17,9 +23,19 @@ def _not_implemented(command: str, milestone: str) -> None:
 
 
 @app.command()
-def scan() -> None:
-    """Inventory + evidence only, no model."""
-    _not_implemented("scan", "M1")
+def scan(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+) -> None:
+    """Inventory + evidence only, no model (great for debugging extractors)."""
+    config = load_config(config_path)
+    result = run_scan(config)
+
+    for item in result.items:
+        evidence = identify_item(item)
+        typer.echo(evidence.model_dump_json())
+
+    for skipped in result.skipped:
+        typer.echo(f"# skipped: {skipped.path} ({skipped.reason})", err=True)
 
 
 @app.command()
