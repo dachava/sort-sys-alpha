@@ -64,7 +64,10 @@ def test_cue_without_a_matching_bin_is_not_a_group(tmp_path: Path) -> None:
 
 
 def test_identify_item_on_a_group_reports_disc_group(tmp_path: Path) -> None:
-    (tmp_path / "game.cue").write_text('FILE "game.bin" BINARY\n')
+    cue_text = 'FILE "game.bin" BINARY\n'
+    # newline="" avoids Windows' text-mode \n -> \r\n translation, so the
+    # on-disk size matches len(cue_text) on every OS.
+    (tmp_path / "game.cue").write_text(cue_text, newline="")
     (tmp_path / "game.bin").write_bytes(b"\x00" * 100)
 
     items = detect_groups(sorted(tmp_path.iterdir()))
@@ -74,7 +77,7 @@ def test_identify_item_on_a_group_reports_disc_group(tmp_path: Path) -> None:
     assert evidence.kind == "disc_group"
     assert evidence.details["group_kind"] == "cue_bin"
     assert evidence.details["member_count"] == 2
-    assert evidence.details["total_size"] == 100 + len('FILE "game.bin" BINARY\n')
+    assert evidence.details["total_size"] == 100 + len(cue_text)
 
 
 def test_identify_item_on_a_file_uses_the_normal_pipeline(tmp_path: Path) -> None:

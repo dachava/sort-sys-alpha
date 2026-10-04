@@ -27,7 +27,12 @@ def test_scan_on_empty_source(tmp_path) -> None:
     source = tmp_path / "Downloads"
     source.mkdir()
     config_path = tmp_path / "config.toml"
-    config_path.write_text(f'source = "{source}"\ndest = "{source / "_Filed"}"\n')
+    # TOML basic strings treat "\" as an escape char, so a raw Windows path
+    # (C:\Users\...) isn't valid inside double quotes; posix-style forward
+    # slashes parse fine into a Path on every OS.
+    config_path.write_text(
+        f'source = "{source.as_posix()}"\ndest = "{(source / "_Filed").as_posix()}"\n'
+    )
 
     result = runner.invoke(app, ["scan", "--config", str(config_path)])
     assert result.exit_code == 0
@@ -40,8 +45,8 @@ def test_scan_reports_a_file(tmp_path) -> None:
     (source / "notes.txt").write_text("hello\n")
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        f'source = "{source}"\n'
-        f'dest = "{source / "_Filed"}"\n'
+        f'source = "{source.as_posix()}"\n'
+        f'dest = "{(source / "_Filed").as_posix()}"\n'
         "min_age_minutes = 0\n"
     )
 
