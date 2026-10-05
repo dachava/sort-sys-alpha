@@ -100,8 +100,10 @@ def build_plan(
     anywhere from seconds to over a minute with a large model on first load,
     so a caller without this would see no output at all until every file in
     `source` has been processed. `on_resolved(index, total, label, elapsed_s)`
-    fires right after, with how long that `resolve()` call actually took --
-    real timing, not a vibe, for comparing models/backends.
+    fires right after, with how long `identify_item()` + `resolve()`
+    together actually took for that item -- the full per-item wall-clock
+    cost (evidence extraction can itself be slow for a large/complex file,
+    not just the LLM call), not a vibe, for comparing models/backends.
     """
     created = datetime.now(UTC)
     run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
@@ -116,8 +118,8 @@ def build_plan(
         if on_item is not None:
             on_item(index, total, label)
 
-        evidence = identify_item(item)
         start = time.monotonic()
+        evidence = identify_item(item)
         verdict, unresolved_reason = resolve(item, evidence, config)
         elapsed = time.monotonic() - start
         if on_resolved is not None:

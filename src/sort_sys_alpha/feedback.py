@@ -102,9 +102,9 @@ def record_verdict(
     field of its JSON reply), not the gate's final templated filename --
     that's what gets shown back as a few-shot example, in the same shape the
     model is asked to produce. `latency_s` is wall-clock time for the
-    `resolve()` call that produced this verdict -- real data for comparing
-    models/backends, same idea as `evaluate.py`'s latency numbers, but from
-    actual runs instead of the fixture set.
+    `identify_item()` + `resolve()` work that produced this verdict -- real
+    data for comparing models/backends, same idea as `evaluate.py`'s latency
+    numbers, but from actual runs instead of the fixture set.
     """
     append_routing_entry(
         RoutingEntry(
