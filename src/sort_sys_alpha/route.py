@@ -86,6 +86,15 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
     if kind == "log":
         return RouteVerdict("Documents/Logs", 1.0, "log file")
 
+    if kind == "mame_romdef":
+        return RouteVerdict(
+            "Other",
+            1.0,
+            "MAME/NeoGeo ROM-set definition file, not a playable ROM",
+            details.get("game_title"),
+            suggest_delete=True,
+        )
+
     if kind == "archive":
         return RouteVerdict("Archives", 1.0, "archive")
 

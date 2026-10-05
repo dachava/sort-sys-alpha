@@ -94,6 +94,21 @@ def test_archive_routes_to_archives(tmp_path: Path) -> None:
     assert verdict.category == "Archives"
 
 
+def test_mame_romdef_routes_to_other_with_suggest_delete(tmp_path: Path) -> None:
+    path = tmp_path / "ctomaday.rc"
+    path.write_text(
+        '#mame set of  ctomaday\n'
+        'game  ctomaday  MVS "Captain Tomaday"\n'
+        'CPU 0x200000\n'
+        '249-p1.bin 0x100000 0x100000 NORM\n'
+        'END\n'
+    )
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Other"
+    assert verdict.suggest_delete is True
+    assert verdict.name_hint == "Captain Tomaday"
+
+
 def test_unclaimed_kind_is_unrouted(tmp_path: Path) -> None:
     path = tmp_path / "mystery.xyz123"
     path.write_bytes(b"\x01\x02\x03")

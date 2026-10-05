@@ -19,6 +19,7 @@ from .executables import ExecutableExtractor
 from .fonts import FontExtractor
 from .images import ImageExtractor
 from .logs import LogExtractor
+from .mame_romdef import MameRomdefExtractor
 from .office import OfficeExtractor
 from .pdf import PdfExtractor
 from .roms import RomExtractor
@@ -37,6 +38,7 @@ EXTRACTORS: list[Extractor] = sorted(
         LogExtractor(),
         ArchiveExtractor(),
         AudioVideoExtractor(),
+        MameRomdefExtractor(),
         PdfExtractor(),
         OfficeExtractor(),
         ImageExtractor(),
