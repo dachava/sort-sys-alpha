@@ -86,6 +86,12 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
     if kind == "log":
         return RouteVerdict("Documents/Logs", 1.0, "log file")
 
+    if kind == "wii_wad":
+        folder = "ROMs/wii"
+        if folder in allowlist:
+            return RouteVerdict(folder, 1.0, f"Wii WAD (type={details.get('wad_type')})")
+        return None
+
     if kind == "mame_romdef":
         return RouteVerdict(
             "Other",

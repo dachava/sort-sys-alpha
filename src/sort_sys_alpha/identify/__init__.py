@@ -27,11 +27,13 @@ from .text import TextExtractor
 from .torrents import TorrentExtractor
 from .types import Evidence
 from .unknown import UnknownExtractor
+from .wii_wad import WiiWadExtractor
 
 EXTRACTORS: list[Extractor] = sorted(
     [
         RomExtractor(),
         DiskImageExtractor(),
+        WiiWadExtractor(),
         ExecutableExtractor(),
         TorrentExtractor(),
         FontExtractor(),
