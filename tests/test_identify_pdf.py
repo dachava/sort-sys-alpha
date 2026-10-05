@@ -1,8 +1,16 @@
+import logging
 from pathlib import Path
 
 from fixtures.make import make_pdf
 
 from sort_sys_alpha.identify import build_evidence
+
+
+def test_pypdf_xref_warnings_are_silenced() -> None:
+    # pypdf's own "Ignoring wrong pointing object" xref-repair warnings
+    # (routine on real-world PDFs) must not reach the terminal by default --
+    # importing identify.pdf is what raises this logger's level.
+    assert logging.getLogger("pypdf").getEffectiveLevel() >= logging.ERROR
 
 
 def test_pdf_text_and_page_count(tmp_path: Path) -> None:

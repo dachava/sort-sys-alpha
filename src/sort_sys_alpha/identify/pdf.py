@@ -6,6 +6,7 @@ until there's an LLM call to hand it to.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,14 @@ from .base import Extractor
 from .types import Evidence
 
 PREVIEW_LINES = 40
+
+# pypdf logs xref-table repairs (e.g. "Ignoring wrong pointing object N 0
+# (offset 0)") as WARNING through the standard `logging` module, which
+# Python prints straight to stderr by default. These are routine on
+# real-world PDFs -- pypdf still parses them fine -- and would otherwise
+# spam every scan/plan/run; ERROR+ still surfaces anything that actually
+# stops extraction from working.
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
 class PdfExtractor(Extractor):
