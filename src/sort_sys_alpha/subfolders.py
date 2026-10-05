@@ -32,6 +32,7 @@ class Classification:
     verdict: str  # "unit" | "grab_bag" | "unsure" | "limit"
     category: str | None
     reason: str
+    suggest_delete: bool = False
 
 
 def _direct_entries(root: Path) -> list[Path]:
@@ -93,18 +94,23 @@ def _disc_console_category(entries: list[Path], config: Config) -> str | None:
     return None
 
 
-def _single_builtin_category(files: list[Path], config: Config) -> str | None:
+def _single_builtin_category(files: list[Path], config: Config) -> tuple[str, bool] | None:
+    """`(category, suggest_delete)` when every file routes to the same
+    rule-tier category -- `suggest_delete` is only True when every member's
+    own verdict agreed on that too, so the whole folder isn't flagged for
+    deletion review on the strength of just one junk file among others.
+    """
     if not files:
         return None
-    categories = set()
+    verdicts = []
     for path in files:
         verdict = route(build_evidence(path), config)
         if verdict is None:
             return None
-        categories.add(verdict.category)
-        if len(categories) > 1:
+        verdicts.append(verdict)
+        if len({v.category for v in verdicts}) > 1:
             return None
-    return next(iter(categories))
+    return verdicts[0].category, all(v.suggest_delete for v in verdicts)
 
 
 def classify_subfolder(root: Path, config: Config) -> Classification:
@@ -143,9 +149,12 @@ def classify_subfolder(root: Path, config: Config) -> Classification:
     # but wrapping one lone file in a whole-folder move isn't what "a folder
     # of only one type" (PLAN.md 4.2b) means — that's just a grab-bag of one.
     if not has_subdirs and len(files) >= 2:
-        single_category = _single_builtin_category(files, config)
-        if single_category:
-            return Classification("unit", single_category, "single-type folder")
+        result = _single_builtin_category(files, config)
+        if result:
+            category, suggest_delete = result
+            return Classification(
+                "unit", category, "single-type folder", suggest_delete=suggest_delete
+            )
 
     return Classification("grab_bag", None, "mixed contents, no project/app markers")
 
@@ -162,7 +171,13 @@ def process_subfolder(
 
     if classification.verdict == "unit":
         members = tuple(sorted(p for p in root.rglob("*") if p.is_file()))
-        unit = FolderUnit(root, classification.category, classification.reason, members)
+        unit = FolderUnit(
+            root,
+            classification.category,
+            classification.reason,
+            members,
+            classification.suggest_delete,
+        )
         return [unit], [], []
 
     if classification.verdict in ("unsure", "limit"):

@@ -71,6 +71,37 @@ def test_single_type_folder_of_images_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "Images"
 
 
+def _romdef(game: str) -> str:
+    return f'game {game} MVS "Test {game}"\nCPU 0x200000\na.bin 0x0 0x100000 NORM\nEND\n'
+
+
+def test_single_type_folder_propagates_suggest_delete(tmp_path: Path) -> None:
+    root = tmp_path / "options"
+    root.mkdir()
+    (root / "a.rc").write_text(_romdef("a"))
+    (root / "b.rc").write_text(_romdef("b"))
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "Other"
+    assert result.suggest_delete is True
+
+
+def test_single_type_folder_requires_every_member_to_agree_on_suggest_delete(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "options"
+    root.mkdir()
+    (root / "a.rc").write_text(_romdef("a"))  # suggest_delete=True (mame_romdef rule)
+    (root / "b.txt").write_text("hi")  # routed to "Other" too, but via a plain config rule
+
+    config = Config.model_validate({"rules": [{"match": {"ext": [".txt"]}, "folder": "Other"}]})
+    result = classify_subfolder(root, config)
+    assert result.verdict == "unit"
+    assert result.category == "Other"
+    assert result.suggest_delete is False  # one member didn't agree, so the unit doesn't claim it
+
+
 def test_mixed_folder_with_no_markers_is_grab_bag(tmp_path: Path) -> None:
     root = tmp_path / "junk"
     root.mkdir()
@@ -135,6 +166,17 @@ def test_process_subfolder_grab_bag_recurses_into_nested_units(tmp_path: Path) -
     assert FileItem in kinds
     assert FolderUnit in kinds
     assert grab_bags == [root]
+
+
+def test_process_subfolder_unit_carries_suggest_delete(tmp_path: Path) -> None:
+    root = tmp_path / "options"
+    root.mkdir()
+    (root / "a.rc").write_text(_romdef("a"))
+    (root / "b.rc").write_text(_romdef("b"))
+
+    items, _held, _grab_bags = process_subfolder(root, Config())
+    assert len(items) == 1
+    assert items[0].suggest_delete is True
 
 
 def test_process_subfolder_unsure_is_held_whole(tmp_path: Path) -> None:

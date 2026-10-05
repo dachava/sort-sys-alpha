@@ -146,7 +146,10 @@ def resolve(
     either tier here.
     """
     if isinstance(item, FolderUnit):
-        return RouteVerdict(item.category, 1.0, item.reason), None
+        return (
+            RouteVerdict(item.category, 1.0, item.reason, suggest_delete=item.suggest_delete),
+            None,
+        )
 
     verdict = route(evidence, config)
     if verdict is not None or isinstance(item, FileGroup):

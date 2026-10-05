@@ -31,6 +31,10 @@ class FolderUnit:
     category: str
     reason: str
     members: tuple[Path, ...]  # every file under root, recursively
+    # True only when classify_subfolder's "single-type folder" path found
+    # every member's own rule-tier verdict agreed on suggest_delete too —
+    # see subfolders._single_builtin_category.
+    suggest_delete: bool = False
 
 
 ScanItem = FileItem | FileGroup | FolderUnit

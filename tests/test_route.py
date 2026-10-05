@@ -162,6 +162,16 @@ def test_resolve_folder_unit_never_calls_the_model(tmp_path: Path) -> None:
     assert reason is None
 
 
+def test_resolve_folder_unit_propagates_suggest_delete(tmp_path: Path) -> None:
+    root = tmp_path / "options"
+    root.mkdir()
+    (root / "a.rc").write_bytes(b"\x00")
+    unit = FolderUnit(root, "Other", "single-type folder", (root / "a.rc",), suggest_delete=True)
+
+    verdict, _reason = resolve(unit, build_evidence(root), Config())
+    assert verdict.suggest_delete is True
+
+
 def test_resolve_file_group_skips_the_llm_tier(tmp_path: Path) -> None:
     cue = tmp_path / "game.cue"
     cue.write_text('FILE "game.bin" BINARY\n')
