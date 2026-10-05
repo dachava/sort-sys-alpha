@@ -97,6 +97,20 @@ def test_build_plan_records_a_held_llm_verdict_in_routing_log(
     assert entries[0].outcome == "held"
 
 
+def test_build_plan_reports_progress_per_item(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    (config.source / "notes.txt").write_text("hi")
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+
+    calls: list[tuple[int, int, str]] = []
+    build_plan(config, on_item=lambda i, total, label: calls.append((i, total, label)))
+
+    assert len(calls) == 2
+    assert {c[2] for c in calls} == {"notes.txt", "mystery.xyz123"}
+    assert all(total == 2 for _i, total, _label in calls)
+    assert [c[0] for c in calls] == [1, 2]
+
+
 def test_build_plan_includes_scan_skips_as_holds(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "partial.crdownload").write_bytes(b"\x00")

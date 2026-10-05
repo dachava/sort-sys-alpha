@@ -20,6 +20,7 @@ from __future__ import annotations
 import statistics
 import time
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,9 +63,23 @@ def load_manifest(evals_dir: Path) -> list[EvalCase]:
     ]
 
 
-def run_eval(evals_dir: Path, config: Config) -> list[EvalResult]:
+def run_eval(
+    evals_dir: Path,
+    config: Config,
+    *,
+    on_case: Callable[[int, int, str], None] | None = None,
+) -> list[EvalResult]:
+    """`on_case(index, total, label)` fires right before each fixture is
+    classified -- same reason as `plan.build_plan`'s `on_item`: this is a
+    synchronous LLM call per case, and silence until the whole set finishes
+    is indistinguishable from a hang.
+    """
+    cases = load_manifest(evals_dir)
+    total = len(cases)
     results = []
-    for case in load_manifest(evals_dir):
+    for index, case in enumerate(cases, start=1):
+        if on_case is not None:
+            on_case(index, total, case.file.name)
         evidence = identify_item(FileItem(case.file))
         start = time.monotonic()
         verdict, reason = resolve(FileItem(case.file), evidence, config)

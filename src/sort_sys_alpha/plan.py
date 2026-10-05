@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -86,15 +87,30 @@ def _size_and_mtime(item: ScanItem) -> tuple[int, float]:
     return total_size, 0.0
 
 
-def build_plan(config: Config, *, run_id: str | None = None) -> Plan:
+def build_plan(
+    config: Config,
+    *,
+    run_id: str | None = None,
+    on_item: Callable[[int, int, str], None] | None = None,
+) -> Plan:
+    """`on_item(index, total, label)` fires right before each item is routed
+    -- `resolve()` can mean a synchronous LLM call per file, which can take
+    anywhere from seconds to over a minute with a large model on first load,
+    so a caller without this would see no output at all until every file in
+    `source` has been processed.
+    """
     created = datetime.now(UTC)
     run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
 
     scan_result = scan(config)
+    total = len(scan_result.items)
     moves: list[PlanMove] = []
     holds: list[PlanHold] = []
 
-    for item in scan_result.items:
+    for index, item in enumerate(scan_result.items, start=1):
+        if on_item is not None:
+            on_item(index, total, _item_sources(item)[0].name)
+
         evidence = identify_item(item)
         verdict, unresolved_reason = resolve(item, evidence, config)
         decision = gate_item(item, evidence, verdict, config, unresolved_reason=unresolved_reason)

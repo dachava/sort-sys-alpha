@@ -74,5 +74,20 @@ def test_render_report_summarizes_accuracy_and_holds(tmp_path: Path) -> None:
     assert "held: 1 case(s)" in report
 
 
+def test_run_eval_reports_progress_per_case(tmp_path: Path) -> None:
+    (tmp_path / "a.xyz").write_bytes(b"\x01")
+    (tmp_path / "b.xyz").write_bytes(b"\x02")
+    _manifest(tmp_path, ("a.xyz", "Documents"), ("b.xyz", "Documents"))
+
+    calls: list[tuple[int, int, str]] = []
+    run_eval(
+        tmp_path,
+        _config("http://127.0.0.1:1"),
+        on_case=lambda i, total, label: calls.append((i, total, label)),
+    )
+
+    assert calls == [(1, 2, "a.xyz"), (2, 2, "b.xyz")]
+
+
 def test_render_report_with_no_results() -> None:
     assert render_report([], Config()) == "no eval cases found."

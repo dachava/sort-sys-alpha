@@ -25,6 +25,15 @@ app = typer.Typer(
 )
 
 
+def _progress(index: int, total: int, label: str) -> None:
+    # To stderr, not stdout: `resolve()` can mean a real synchronous LLM
+    # call per file, so without this there's no output at all until every
+    # file is done -- which with a large model looks indistinguishable from
+    # a hang. Kept off stdout so scripts piping plan/run's summary lines
+    # aren't affected.
+    typer.echo(f"[{index}/{total}] {label}", err=True)
+
+
 @app.command()
 def scan(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
@@ -47,7 +56,7 @@ def plan(
 ) -> None:
     """Produce plan.json + report.md."""
     config = load_config(config_path)
-    the_plan = build_plan(config)
+    the_plan = build_plan(config, on_item=_progress)
     plan_path, report_path = write_plan(the_plan, config)
     typer.echo(f"{len(the_plan.moves)} to move, {len(the_plan.holds)} held.")
     typer.echo(f"plan: {plan_path}")
@@ -79,7 +88,7 @@ def run(
 ) -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
     config = load_config(config_path)
-    the_plan = build_plan(config)
+    the_plan = build_plan(config, on_item=_progress)
     plan_path, report_path = write_plan(the_plan, config)
 
     if config.schedule.mode == "plan":
@@ -131,7 +140,7 @@ def eval_(
 ) -> None:
     """Run the labeled fixture set, print accuracy per category."""
     config = load_config(config_path)
-    results = run_eval(evals_dir, config)
+    results = run_eval(evals_dir, config, on_case=_progress)
     typer.echo(render_eval_report(results, config))
 
 
