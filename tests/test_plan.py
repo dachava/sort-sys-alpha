@@ -176,6 +176,23 @@ def test_write_plan_creates_plan_report_and_held_log(tmp_path: Path) -> None:
     assert "mystery.xyz123" in (config.dest / STATE_DIR_NAME / "held.log").read_text()
 
 
+def test_write_plan_handles_non_cp1252_filenames(tmp_path: Path) -> None:
+    # Regression: write_plan() used to call Path.write_text() with no
+    # encoding, which falls back to the OS locale encoding -- cp1252 on
+    # Windows. A filename with a character outside cp1252 (e.g. "★", not in
+    # that codepage) would crash plan.json/report.md writing with a
+    # UnicodeEncodeError, even though the move itself never touches the file.
+    config = _config(tmp_path)
+    (config.source / "★starred-notes.txt").write_text("not in cp1252")
+
+    the_plan = build_plan(config)
+    plan_path, report_path = write_plan(the_plan, config)
+
+    assert "★starred-notes.txt" in report_path.read_text(encoding="utf-8")
+    reloaded = load_plan(plan_path)
+    assert reloaded.moves[0].sources[0].name == "★starred-notes.txt"
+
+
 def test_plan_json_round_trips(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "notes.txt").write_text("hi")

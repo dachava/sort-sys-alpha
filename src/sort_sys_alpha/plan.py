@@ -225,8 +225,8 @@ def write_plan(plan: Plan, config: Config) -> tuple[Path, Path]:
     state_dir = _state_dir(config)
     plan_path = state_dir / PLAN_FILENAME
     report_path = state_dir / REPORT_FILENAME
-    plan_path.write_text(plan.model_dump_json(indent=2))
-    report_path.write_text(render_report(plan))
+    plan_path.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    report_path.write_text(render_report(plan), encoding="utf-8")
     append_held_log(
         [(h.sources[0], h.reason) for h in plan.holds], plan.run_id, "plan", config
     )
@@ -234,4 +234,4 @@ def write_plan(plan: Plan, config: Config) -> tuple[Path, Path]:
 
 
 def load_plan(path: Path) -> Plan:
-    return Plan.model_validate_json(path.read_text())
+    return Plan.model_validate_json(path.read_text(encoding="utf-8"))
