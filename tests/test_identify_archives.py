@@ -41,3 +41,12 @@ def test_rar_is_classified_as_an_archive_without_listing_members(tmp_path: Path)
     evidence = build_evidence(path)
     assert evidence.kind == "archive"
     assert evidence.details == {}
+
+
+def test_7z_is_classified_as_an_archive_without_listing_members(tmp_path: Path) -> None:
+    path = tmp_path / "sample.7z"
+    path.write_bytes(b"7z\xbc\xaf\x27\x1c" + b"\x00" * 20)
+
+    evidence = build_evidence(path)
+    assert evidence.kind == "archive"
+    assert evidence.details == {}

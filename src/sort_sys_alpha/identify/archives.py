@@ -1,13 +1,11 @@
 """Archive member listing, via stdlib `zipfile`/`tarfile`. Never extracts.
 See PLAN.md section 4.3.
 
-`.7z` isn't in scope yet (no stdlib support, and py7zr is an extra
-dependency this milestone doesn't need) — it falls through to the
-true_type/extension-only evidence from the unknown-type extractor instead of
-getting a member listing. `.rar` is the same story for *listing* members,
-but it's still routed deterministically (PLAN.md rule 1: rules before the
+`.rar` and `.7z` can't get a member listing (no stdlib support, and
+py7zr/rarfile are extra dependencies this milestone doesn't need), but
+they're still routed deterministically (PLAN.md rule 1: rules before the
 model) since classifying "this is an archive" by extension needs no library
-at all — `extract()` just returns no member details for it.
+at all — `extract()` just returns no member details for either.
 """
 
 from __future__ import annotations
@@ -25,6 +23,8 @@ MAX_MEMBERS = 20
 ZIP_EXTENSIONS = {".zip"}
 TAR_EXTENSIONS = {".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz"}
 RAR_EXTENSIONS = {".rar"}
+SEVENZ_EXTENSIONS = {".7z"}
+NO_LISTING_EXTENSIONS = RAR_EXTENSIONS | SEVENZ_EXTENSIONS
 
 
 class ArchiveExtractor(Extractor):
@@ -34,14 +34,14 @@ class ArchiveExtractor(Extractor):
     def can_handle(self, evidence: Evidence) -> bool:
         return (
             evidence.extension in ZIP_EXTENSIONS
-            or evidence.extension in RAR_EXTENSIONS
+            or evidence.extension in NO_LISTING_EXTENSIONS
             or any(evidence.original_name.lower().endswith(suffix) for suffix in TAR_EXTENSIONS)
         )
 
     def extract(self, path: Path, evidence: Evidence) -> dict[str, Any]:
         if evidence.extension in ZIP_EXTENSIONS:
             return self._zip(path)
-        if evidence.extension in RAR_EXTENSIONS:
+        if evidence.extension in NO_LISTING_EXTENSIONS:
             return {}
         return self._tar(path)
 

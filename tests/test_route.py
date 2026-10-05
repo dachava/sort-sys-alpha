@@ -101,6 +101,13 @@ def test_rar_routes_to_archives(tmp_path: Path) -> None:
     assert verdict.category == "Archives"
 
 
+def test_7z_routes_to_archives(tmp_path: Path) -> None:
+    path = tmp_path / "stuff.7z"
+    path.write_bytes(b"7z\xbc\xaf\x27\x1c" + b"\x00" * 20)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
 def test_wii_wad_routes_to_roms_wii(tmp_path: Path) -> None:
     path = tmp_path / "channel.wad"
     path.write_bytes(bytes.fromhex("00000020") + b"Is" + b"\x00" * 24)
