@@ -164,6 +164,11 @@ def load_config(path: Path | None = None) -> Config:
     candidate = path or default_config_path()
     if not candidate.exists():
         return Config()
-    with candidate.open("rb") as f:
-        data = tomllib.load(f)
+    raw = candidate.read_bytes()
+    # Windows editors (Notepad, PowerShell's `-Encoding utf8`, which -- unlike
+    # PowerShell 7+ -- writes a BOM on Windows PowerShell 5.1) commonly emit a
+    # UTF-8 BOM. tomllib treats a BOM as invalid syntax rather than stripping
+    # it, so do that ourselves before parsing.
+    raw = raw.removeprefix(b"\xef\xbb\xbf")
+    data = tomllib.loads(raw.decode("utf-8"))
     return Config.model_validate(data)

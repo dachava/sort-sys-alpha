@@ -69,6 +69,15 @@ def test_load_from_file(tmp_path: Path) -> None:
     assert config.confidence_min == 0.9
 
 
+def test_load_strips_a_leading_utf8_bom(tmp_path: Path) -> None:
+    # Windows PowerShell 5.1's `-Encoding utf8` (and some editors' "UTF-8"
+    # save option) writes a BOM, which tomllib otherwise rejects outright.
+    config_path = tmp_path / "config.toml"
+    config_path.write_bytes(b"\xef\xbb\xbf" + b'confidence_min = 0.9\n')
+    config = load_config(config_path)
+    assert config.confidence_min == 0.9
+
+
 def test_sample_config_in_plan_is_valid_toml() -> None:
     sample = """
 source = "~/Downloads"
