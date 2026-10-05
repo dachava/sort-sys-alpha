@@ -14,10 +14,11 @@ from .base import Extractor
 from .iso9660 import PrimaryVolumeDescriptor, list_root_entries, read_pvd, read_root_file
 from .types import Evidence
 
-DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg"}
+DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg", ".wbfs"}
 
 GC_MAGIC = b"\xc2\x33\x9f\x3d"
 WII_MAGIC = b"\x5d\x1c\x9e\xa3"
+WBFS_MAGIC = b"WBFS"
 
 PS_MARKERS = {"SYSTEM.CNF"}
 PSP_MARKERS = {"PSP_GAME", "UMD_DATA.BIN"}
@@ -47,6 +48,11 @@ class DiskImageExtractor(Extractor):
         return evidence.extension in DISC_EXTENSIONS
 
     def extract(self, path: Path, evidence: Evidence) -> dict[str, Any]:
+        # WBFS wraps sectors in its own container rather than a plain
+        # ISO9660 filesystem, so it's checked before the PVD read below
+        # would otherwise be tried (and fail) on it.
+        if _read_at(path, 0x0, 4) == WBFS_MAGIC:
+            return {"console": "wii", "disc_kind": "wbfs"}
         if _read_at(path, 0x1C, 4) == GC_MAGIC:
             return {"console": "gc", "disc_kind": "gamecube"}
         if _read_at(path, 0x18, 4) == WII_MAGIC:

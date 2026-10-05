@@ -32,3 +32,12 @@ def test_truncated_zip_is_held_gracefully(tmp_path: Path) -> None:
     evidence = build_evidence(path)
     assert evidence.kind == "archive"
     assert evidence.details == {}
+
+
+def test_rar_is_classified_as_an_archive_without_listing_members(tmp_path: Path) -> None:
+    path = tmp_path / "sample.rar"
+    path.write_bytes(b"Rar!\x1a\x07\x01\x00" + b"\x00" * 20)
+
+    evidence = build_evidence(path)
+    assert evidence.kind == "archive"
+    assert evidence.details == {}

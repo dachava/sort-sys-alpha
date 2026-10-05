@@ -59,6 +59,14 @@ def test_wii_magic(tmp_path: Path) -> None:
     assert evidence.details == {"console": "wii", "disc_kind": "wii"}
 
 
+def test_wbfs_magic(tmp_path: Path) -> None:
+    path = tmp_path / "game.wbfs"
+    make_disc_magic(path, offset=0x0, magic=b"WBFS")
+
+    evidence = build_evidence(path)
+    assert evidence.details == {"console": "wii", "disc_kind": "wbfs"}
+
+
 def test_not_an_iso_at_all(tmp_path: Path) -> None:
     path = tmp_path / "random.img"
     path.write_bytes(b"\x00" * (3 * 2048))

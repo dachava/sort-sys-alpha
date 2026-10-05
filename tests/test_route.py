@@ -94,6 +94,22 @@ def test_archive_routes_to_archives(tmp_path: Path) -> None:
     assert verdict.category == "Archives"
 
 
+def test_rar_routes_to_archives(tmp_path: Path) -> None:
+    path = tmp_path / "stuff.rar"
+    path.write_bytes(b"Rar!\x1a\x07\x01\x00" + b"\x00" * 20)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
+def test_wbfs_routes_to_roms_wii(tmp_path: Path) -> None:
+    from fixtures.make import make_disc_magic
+
+    path = tmp_path / "game.wbfs"
+    make_disc_magic(path, offset=0x0, magic=b"WBFS")
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/wii"
+
+
 def test_mame_romdef_routes_to_other_with_suggest_delete(tmp_path: Path) -> None:
     path = tmp_path / "ctomaday.rc"
     path.write_text(
