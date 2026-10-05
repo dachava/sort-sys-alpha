@@ -20,13 +20,16 @@ from .fonts import FontExtractor
 from .images import ImageExtractor
 from .logs import LogExtractor
 from .mame_romdef import MameRomdefExtractor
+from .ml_weights import MlWeightsExtractor
 from .office import OfficeExtractor
+from .patches import RomPatchExtractor
 from .pdf import PdfExtractor
 from .roms import RomExtractor
 from .text import TextExtractor
 from .torrents import TorrentExtractor
 from .types import Evidence
 from .unknown import UnknownExtractor
+from .url_shortcut import UrlShortcutExtractor
 from .wii_wad import WiiWadExtractor
 
 EXTRACTORS: list[Extractor] = sorted(
@@ -41,6 +44,9 @@ EXTRACTORS: list[Extractor] = sorted(
         ArchiveExtractor(),
         AudioVideoExtractor(),
         MameRomdefExtractor(),
+        RomPatchExtractor(),
+        UrlShortcutExtractor(),
+        MlWeightsExtractor(),
         PdfExtractor(),
         OfficeExtractor(),
         ImageExtractor(),

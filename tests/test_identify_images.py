@@ -31,3 +31,18 @@ def test_filename_says_screenshot_even_without_matching_resolution(tmp_path: Pat
 
     evidence = build_evidence(path)
     assert evidence.details["looks_like_screenshot"] is True
+
+
+def test_psd_is_claimed_as_an_image(tmp_path: Path) -> None:
+    # Pillow's PSD plugin is read-only, so there's no library helper to
+    # build a real one here -- same situation as the truncated-zip test in
+    # test_identify_archives.py: dispatch (can_handle) is extension-based,
+    # so a file Pillow can't actually decode still gets claimed as "image"
+    # and just comes back with no details, rather than falling through to
+    # the LLM tier as "unknown".
+    path = tmp_path / "artwork.psd"
+    path.write_bytes(b"\x00" * 50)
+
+    evidence = build_evidence(path)
+    assert evidence.kind == "image"
+    assert evidence.details == {}

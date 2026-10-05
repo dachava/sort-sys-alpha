@@ -19,7 +19,7 @@ from .types import Evidence
 
 ROM_EXTENSIONS = {
     ".nes", ".gb", ".gbc", ".gba", ".z64", ".n64", ".v64",
-    ".md", ".gen", ".sfc", ".smc", ".nds",
+    ".md", ".gen", ".sfc", ".smc", ".nds", ".dol",
 }
 
 N64_MAGICS = {
@@ -75,5 +75,12 @@ class RomExtractor(Extractor):
 
         if ext == ".nds":
             return {"console": "nds", "verified": False}
+
+        if ext == ".dol":
+            # Wii/GameCube homebrew executable (Dolphin Executable) -- no
+            # fixed magic bytes to check, same extension-only situation as
+            # SNES/NDS above. All homebrew .dol files seen so far are Wii
+            # apps, so this assumes "wii" rather than "gc".
+            return {"console": "wii", "verified": False}
 
         return {"console": None, "verified": False}

@@ -14,11 +14,12 @@ from .base import Extractor
 from .iso9660 import PrimaryVolumeDescriptor, list_root_entries, read_pvd, read_root_file
 from .types import Evidence
 
-DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg", ".wbfs"}
+DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg", ".wbfs", ".rvz"}
 
 GC_MAGIC = b"\xc2\x33\x9f\x3d"
 WII_MAGIC = b"\x5d\x1c\x9e\xa3"
 WBFS_MAGIC = b"WBFS"
+RVZ_MAGIC = b"RVZ\x01"
 
 PS_MARKERS = {"SYSTEM.CNF"}
 PSP_MARKERS = {"PSP_GAME", "UMD_DATA.BIN"}
@@ -53,6 +54,12 @@ class DiskImageExtractor(Extractor):
         # would otherwise be tried (and fail) on it.
         if _read_at(path, 0x0, 4) == WBFS_MAGIC:
             return {"console": "wii", "disc_kind": "wbfs"}
+        if _read_at(path, 0x0, 4) == RVZ_MAGIC:
+            # Dolphin's compressed disc format wraps either a GameCube or a
+            # Wii disc -- telling which would mean parsing further into the
+            # container, so this is deliberately not claiming a console,
+            # same as the generic iso9660 fallback below.
+            return {"disc_kind": "rvz"}
         if _read_at(path, 0x1C, 4) == GC_MAGIC:
             return {"console": "gc", "disc_kind": "gamecube"}
         if _read_at(path, 0x18, 4) == WII_MAGIC:

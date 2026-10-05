@@ -124,6 +124,44 @@ def test_wbfs_routes_to_roms_wii(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/wii"
 
 
+def test_dol_routes_to_roms_wii(tmp_path: Path) -> None:
+    path = tmp_path / "homebrew.dol"
+    path.write_bytes(b"\x00" * 50)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/wii"
+
+
+def test_rvz_routes_to_isos(tmp_path: Path) -> None:
+    from fixtures.make import make_disc_magic
+
+    path = tmp_path / "game.rvz"
+    make_disc_magic(path, offset=0x0, magic=b"RVZ\x01")
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ISOs"
+
+
+def test_ips_patch_routes_to_other(tmp_path: Path) -> None:
+    path = tmp_path / "translation.ips"
+    path.write_bytes(b"PATCH" + b"\x00" * 10)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Other"
+
+
+def test_url_shortcut_routes_to_documents(tmp_path: Path) -> None:
+    path = tmp_path / "saved.url"
+    path.write_text("[InternetShortcut]\nURL=https://example.com\n")
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Documents"
+
+
+def test_safetensors_routes_to_other(tmp_path: Path) -> None:
+    header_json = b'{"__metadata__":{}}'
+    path = tmp_path / "model.safetensors"
+    path.write_bytes(len(header_json).to_bytes(8, "little") + header_json + b"\x00" * 5)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Other"
+
+
 def test_mame_romdef_routes_to_other_with_suggest_delete(tmp_path: Path) -> None:
     path = tmp_path / "ctomaday.rc"
     path.write_text(

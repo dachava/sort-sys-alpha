@@ -19,9 +19,9 @@ from .items import FileGroup, FolderUnit, ScanItem
 from .llm.backend import LlmError, backend_for
 
 # NES/GB/GBC/GBA/N64/Genesis are verified against a header signature;
-# SNES/NDS have no cheap signature (see identify/roms.py), so their
-# console assignment is extension-only by design, not a failed check.
-EXTENSION_ONLY_CONSOLES = {"snes", "nds"}
+# SNES/NDS/.dol-as-wii have no cheap signature (see identify/roms.py), so
+# their console assignment is extension-only by design, not a failed check.
+EXTENSION_ONLY_CONSOLES = {"snes", "nds", "wii"}
 
 INSTALLER_EXTENSIONS = {".exe", ".msi"}
 NOTE_EXTENSIONS = {".txt", ".md"}
@@ -122,7 +122,18 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
             return None
         if details.get("disc_kind") == "iso9660":
             return RouteVerdict("ISOs", 1.0, "generic ISO image", details.get("volume_label"))
+        if details.get("disc_kind") == "rvz":
+            return RouteVerdict("ISOs", 1.0, "Dolphin RVZ compressed disc image, console unknown")
         return None
+
+    if kind == "rom_patch":
+        return RouteVerdict("Other", 1.0, "IPS ROM patch, not a playable ROM")
+
+    if kind == "url_shortcut":
+        return RouteVerdict("Documents", 1.0, "internet shortcut", details.get("target_url"))
+
+    if kind == "ml_weights":
+        return RouteVerdict("Other", 1.0, "ML model weights (safetensors)")
 
     return None
 

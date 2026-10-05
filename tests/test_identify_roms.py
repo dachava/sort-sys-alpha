@@ -77,3 +77,11 @@ def test_snes_and_nds_are_extension_only(tmp_path: Path) -> None:
     nds = build_evidence(tmp_path / "game.nds")
     assert sfc.details == {"console": "snes", "verified": False}
     assert nds.details == {"console": "nds", "verified": False}
+
+
+def test_dol_is_extension_only_wii(tmp_path: Path) -> None:
+    path = tmp_path / "homebrew.dol"
+    path.write_bytes(b"\x00" * 100)
+
+    evidence = build_evidence(path)
+    assert evidence.details == {"console": "wii", "verified": False}

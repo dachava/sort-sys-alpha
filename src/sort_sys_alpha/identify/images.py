@@ -12,7 +12,7 @@ from PIL import ExifTags, Image, UnidentifiedImageError
 from .base import Extractor
 from .types import Evidence
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".tiff"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".tiff", ".psd"}
 
 EXIF_FIELDS = {"Make", "Model", "DateTimeOriginal", "DateTime", "Software"}
 
