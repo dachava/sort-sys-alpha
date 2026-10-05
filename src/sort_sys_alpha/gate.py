@@ -42,19 +42,34 @@ def _target_extension(item: ScanItem, evidence: Evidence) -> str:
     return "" if isinstance(item, FolderUnit) else evidence.extension
 
 
+#  A real run showed the model saying "ROMs/ps1" where the config's
+# canonical console name (matched against disc BOOT/BOOT2 markers in
+# disk_images.py) is "psx" -- a genuinely different word, not a case
+# variant, for a console people overwhelmingly call "PS1" in casual
+# English. Add to this only on confirmed real-world mismatches, not
+# speculatively -- it's a tolerance list, not a general nickname dictionary.
+CONSOLE_ALIASES = {"ps1": "psx"}
+
+
 def _canonical_category(category: str, allowlist: set[str]) -> str | None:
     """`category`, cased exactly as it appears in `allowlist`, or `None` if
-    it isn't there even case-insensitively. Rule-tier verdicts always come
-    straight from allowlist-derived constants, so this only ever matters for
-    the LLM tier: nothing guarantees the model echoes back the exact case of
-    a category it was shown in the system prompt, and that's not something
-    a prompt change should be relied on to fix (PLAN.md 4.6: safety/
-    correctness checks belong in code).
+    it isn't there even case-insensitively/alias-insensitively. Rule-tier
+    verdicts always come straight from allowlist-derived constants, so this
+    only ever matters for the LLM tier: nothing guarantees the model echoes
+    back the exact vocabulary it was shown in the system prompt, and that's
+    not something a prompt change should be relied on to fix (PLAN.md 4.6:
+    safety/correctness checks belong in code).
     """
-    if category in allowlist:
-        return category
     by_lower = {folder.lower(): folder for folder in allowlist}
-    return by_lower.get(category.lower())
+    if category.lower() in by_lower:
+        return by_lower[category.lower()]
+
+    prefix, sep, console = category.partition("/")
+    if sep and prefix.lower() == "roms" and console.lower() in CONSOLE_ALIASES:
+        aliased = f"roms/{CONSOLE_ALIASES[console.lower()]}"
+        return by_lower.get(aliased)
+
+    return None
 
 
 def gate_item(

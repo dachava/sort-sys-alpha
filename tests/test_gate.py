@@ -89,6 +89,20 @@ def test_wrong_case_category_is_normalized_not_held(tmp_path: Path) -> None:
     assert decision.target == _config(tmp_path).dest / "Documents/Notes" / decision.name
 
 
+def test_ps1_console_alias_is_normalized_to_psx(tmp_path: Path) -> None:
+    # Regression: a real run showed the model saying "ROMs/ps1" where the
+    # config's canonical console name is "psx" -- a different word, not a
+    # case variant, for the console people casually call "PS1".
+    path = tmp_path / "SCPH1001.BIN"
+    path.write_bytes(b"\x00")
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("ROMs/ps1", 0.9, "model verdict")
+
+    decision = gate_item(FileItem(path), evidence, verdict, _config(tmp_path))
+    assert isinstance(decision, MoveDecision)
+    assert decision.category == "ROMs/psx"
+
+
 def test_valid_move_produces_a_target_under_dest(tmp_path: Path) -> None:
     path = tmp_path / "notes.txt"
     path.write_text("hi")
