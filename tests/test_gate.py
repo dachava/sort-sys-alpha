@@ -73,6 +73,22 @@ def test_category_not_in_allowlist_is_held(tmp_path: Path) -> None:
     assert "allowlist" in decision.reason
 
 
+def test_wrong_case_category_is_normalized_not_held(tmp_path: Path) -> None:
+    # Regression: an LLM verdict can echo back a category in different case
+    # than the allowlist shows it ("roms/ps1" vs "ROMs/ps1") -- the model
+    # was shown the exact casing, but nothing guarantees it repeats it, and
+    # that's a gate.py job to tolerate, not a prompt-wording fix.
+    path = tmp_path / "notes.txt"
+    path.write_text("hi")
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("documents/notes", 0.9, "model verdict")
+
+    decision = gate_item(FileItem(path), evidence, verdict, _config(tmp_path))
+    assert isinstance(decision, MoveDecision)
+    assert decision.category == "Documents/Notes"
+    assert decision.target == _config(tmp_path).dest / "Documents/Notes" / decision.name
+
+
 def test_valid_move_produces_a_target_under_dest(tmp_path: Path) -> None:
     path = tmp_path / "notes.txt"
     path.write_text("hi")

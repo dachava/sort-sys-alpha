@@ -42,6 +42,21 @@ def _target_extension(item: ScanItem, evidence: Evidence) -> str:
     return "" if isinstance(item, FolderUnit) else evidence.extension
 
 
+def _canonical_category(category: str, allowlist: set[str]) -> str | None:
+    """`category`, cased exactly as it appears in `allowlist`, or `None` if
+    it isn't there even case-insensitively. Rule-tier verdicts always come
+    straight from allowlist-derived constants, so this only ever matters for
+    the LLM tier: nothing guarantees the model echoes back the exact case of
+    a category it was shown in the system prompt, and that's not something
+    a prompt change should be relied on to fix (PLAN.md 4.6: safety/
+    correctness checks belong in code).
+    """
+    if category in allowlist:
+        return category
+    by_lower = {folder.lower(): folder for folder in allowlist}
+    return by_lower.get(category.lower())
+
+
 def gate_item(
     item: ScanItem,
     evidence: Evidence,
@@ -58,11 +73,12 @@ def gate_item(
         return HoldDecision(item, evidence, reason)
 
     allowlist = config.resolved_folder_allowlist()
-    if verdict.category not in allowlist:
+    category = _canonical_category(verdict.category, allowlist)
+    if category is None:
         return HoldDecision(item, evidence, f"category {verdict.category!r} not in allowlist")
 
     try:
-        name = build_name(evidence, verdict, verdict.category, config)
+        name = build_name(evidence, verdict, category, config)
     except NamingError as e:
         return HoldDecision(item, evidence, str(e))
 
@@ -70,7 +86,7 @@ def gate_item(
         return HoldDecision(item, evidence, "name is empty or unsafe after slugifying")
 
     full_name = f"{name}{_target_extension(item, evidence)}"
-    target = config.dest / verdict.category / full_name
+    target = config.dest / category / full_name
 
     try:
         target.resolve().relative_to(config.dest.resolve())
@@ -80,7 +96,7 @@ def gate_item(
     return MoveDecision(
         item,
         evidence,
-        verdict.category,
+        category,
         full_name,
         target,
         verdict.confidence,
