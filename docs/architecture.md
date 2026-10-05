@@ -5,9 +5,9 @@ gate rules; section 7, config schema). This doc tracks how that design maps onto
 the actual modules, and is updated as milestones land.
 
 ```
-scan.py ─► subfolders.py ─► identify/ ─► route.py ─► (rules | llm/) ─► gate.py ─► plan.py ─► apply.py ─► journal.py
-                                              ▲                                      │           │           │
-                                              └──────────────── feedback.py ◄────────┴───────────┴───────────┘
+scan.py ─► subfolders.py ─► duplicates.py ─► identify/ ─► route.py ─► (rules | llm/) ─► gate.py ─► plan.py ─► apply.py ─► journal.py
+                                                   ▲                                      │           │           │
+                                                   └──────────────── feedback.py ◄────────┴───────────┴───────────┘
 ```
 `feedback.py` is cross-cutting, not another pipeline stage: `plan.py` writes a
 `routing.jsonl` entry per LLM verdict, `llm/` reads recent accepted ones back
@@ -34,6 +34,7 @@ plan edit or an `undo` overrides one.
 | `scripts/windows/` | `install.ps1` (uv + default config), `register-task.ps1` (idle-gated weekly Scheduled Task), `notify.ps1` (the actual toast, shelled out to from `notify.py`) | M4 |
 | `feedback.py` | `routing.jsonl`: every LLM-tier verdict, plan edits and undos as corrections, recent-accepted examples for few-shot | M5 |
 | `evaluate.py` | `eval` harness: runs `evals/manifest.toml` fixtures through `route.resolve()`, reports accuracy per category and LLM latency | M5 |
+| `duplicates.py` | Exact-content duplicate detection for loose files, size-prefiltered before hashing; a confirmed duplicate is held with no identify/route/LLM cost (ADR 0005) | post-M5 |
 
 Decisions with rationale (destination layout, scheduled-run behavior, etc.) are
 recorded as ADRs in [`adr/`](adr/).

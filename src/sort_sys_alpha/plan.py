@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from . import feedback
 from .config import Config
+from .duplicates import partition_duplicates
 from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
 from .items import FileItem, FolderUnit, ScanItem
@@ -104,16 +105,24 @@ def build_plan(
     together actually took for that item -- the full per-item wall-clock
     cost (evidence extraction can itself be slow for a large/complex file,
     not just the LLM call), not a vibe, for comparing models/backends.
+
+    Exact-content duplicates among loose files (ADR 0005) are partitioned
+    out before any of that: they're held immediately, with no identify/
+    route/LLM cost at all, so `total`/`on_item`/`on_resolved` only ever see
+    the one copy of a duplicate group that proceeds through the pipeline.
     """
     created = datetime.now(UTC)
     run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
 
     scan_result = scan(config)
-    total = len(scan_result.items)
+    scan_items, duplicate_holds = partition_duplicates(scan_result.items)
+    total = len(scan_items)
     moves: list[PlanMove] = []
-    holds: list[PlanHold] = []
+    holds: list[PlanHold] = [
+        PlanHold(sources=[path], reason=reason) for path, reason in duplicate_holds
+    ]
 
-    for index, item in enumerate(scan_result.items, start=1):
+    for index, item in enumerate(scan_items, start=1):
         label = _item_sources(item)[0].name
         if on_item is not None:
             on_item(index, total, label)

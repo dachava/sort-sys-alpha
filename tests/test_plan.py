@@ -154,6 +154,17 @@ def test_build_plan_records_latency_for_an_llm_verdict(tmp_path: Path, fake_llm_
     assert entries[0].latency_s >= 0.0
 
 
+def test_build_plan_holds_exact_duplicates_without_touching_the_llm(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    (config.source / "notes.txt").write_text("same content")
+    (config.source / "copy of notes.txt").write_text("same content")
+
+    the_plan = build_plan(config)
+    assert len(the_plan.moves) == 1
+    assert len(the_plan.holds) == 1
+    assert "exact duplicate" in the_plan.holds[0].reason
+
+
 def test_build_plan_includes_scan_skips_as_holds(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "partial.crdownload").write_bytes(b"\x00")

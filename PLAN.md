@@ -14,7 +14,11 @@ gives it a descriptive name, and files it into a fixed set of folders. It **neve
 This is the **first module** of SORT-SYS-ALPHA (the Downloads module). Other modules come later (see §12), but v1
 stays focused on Downloads.
 
-Non-goals for v1: other folders, de-duplication, sync, a GUI.
+Non-goals for v1: other folders, sync, a GUI. (De-duplication was originally
+out of scope too, but exact-content duplicate detection for loose files was
+added after real usage showed the same readme/license/installer repeated
+dozens of times across unrelated downloads -- see ADR 0005. Folder-level and
+archive-content dedup remain out of scope.)
 
 ## 2. Principles (from the article, kept as hard rules)
 
