@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import typer
@@ -46,6 +47,16 @@ def _resolved(index: int, total: int, label: str, elapsed_s: float) -> None:
         typer.echo(f"[{index}/{total}] {label} took {elapsed_s:.1f}s", err=True)
 
 
+def _format_duration(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
 @app.command()
 def scan(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
@@ -68,11 +79,14 @@ def plan(
 ) -> None:
     """Produce plan.json + report.md."""
     config = load_config(config_path)
+    start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
+    elapsed = time.monotonic() - start
     typer.echo(f"{len(the_plan.moves)} to move, {len(the_plan.holds)} held.")
     typer.echo(f"plan: {plan_path}")
     typer.echo(f"report: {report_path}")
+    typer.echo(f"done in {_format_duration(elapsed)}")
 
 
 @app.command()
@@ -100,6 +114,7 @@ def run(
 ) -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
     config = load_config(config_path)
+    start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
 
@@ -107,6 +122,7 @@ def run(
         typer.echo(f"{len(the_plan.moves)} ready to review.")
         typer.echo(f"plan: {plan_path}")
         typer.echo(f"report: {report_path}")
+        typer.echo(f"done in {_format_duration(time.monotonic() - start)}")
         if config.schedule.notify:
             notify("sort-sys-alpha", f"{len(the_plan.moves)} files ready to review")
         return
@@ -115,6 +131,7 @@ def run(
     typer.echo(f"moved {len(result.moved)}, held {len(result.held)}.")
     for folder in result.emptied_folders:
         typer.echo(f"# left empty, not deleted: {folder}", err=True)
+    typer.echo(f"done in {_format_duration(time.monotonic() - start)}")
 
     if config.schedule.notify:
         moved_roots = {root for root, _ in result.moved}

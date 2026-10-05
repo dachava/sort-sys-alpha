@@ -2,7 +2,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from sort_sys_alpha.cli import _resolved, app
+from sort_sys_alpha.cli import _format_duration, _resolved, app
 
 runner = CliRunner()
 
@@ -15,6 +15,12 @@ def test_resolved_only_prints_above_the_slow_threshold(capsys) -> None:
     err = capsys.readouterr().err
     assert "[2/10] slow.xyz" in err
     assert "3.5s" in err
+
+
+def test_format_duration() -> None:
+    assert _format_duration(7) == "7s"
+    assert _format_duration(125) == "2m 5s"
+    assert _format_duration(3725) == "1h 2m 5s"
 
 
 def _write_config(tmp_path: Path, source: Path, **extra_lines: str) -> Path:
@@ -106,6 +112,7 @@ def test_plan_writes_plan_and_report(tmp_path: Path) -> None:
     assert (source / "_Filed" / ".sort-sys-alpha" / "plan.json").exists()
     assert (source / "_Filed" / ".sort-sys-alpha" / "report.md").exists()
     assert (source / "notes.txt").exists()  # plan never touches source
+    assert "done in" in result.output
 
 
 def test_run_in_plan_mode_never_touches_source(tmp_path: Path) -> None:
@@ -119,6 +126,7 @@ def test_run_in_plan_mode_never_touches_source(tmp_path: Path) -> None:
     assert "1 ready to review" in result.output
     assert (source / "notes.txt").exists()
     assert (source / "_Filed" / ".sort-sys-alpha" / "plan.json").exists()
+    assert "done in" in result.output
 
 
 def test_run_in_auto_mode_moves_files(tmp_path: Path) -> None:
@@ -131,6 +139,7 @@ def test_run_in_auto_mode_moves_files(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "moved 1, held 0" in result.output
     assert not (source / "notes.txt").exists()
+    assert "done in" in result.output
 
 
 def test_apply_without_a_plan_fails_cleanly(tmp_path: Path) -> None:
