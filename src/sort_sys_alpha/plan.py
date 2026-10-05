@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -92,12 +93,15 @@ def build_plan(
     *,
     run_id: str | None = None,
     on_item: Callable[[int, int, str], None] | None = None,
+    on_resolved: Callable[[int, int, str, float], None] | None = None,
 ) -> Plan:
     """`on_item(index, total, label)` fires right before each item is routed
     -- `resolve()` can mean a synchronous LLM call per file, which can take
     anywhere from seconds to over a minute with a large model on first load,
     so a caller without this would see no output at all until every file in
-    `source` has been processed.
+    `source` has been processed. `on_resolved(index, total, label, elapsed_s)`
+    fires right after, with how long that `resolve()` call actually took --
+    real timing, not a vibe, for comparing models/backends.
     """
     created = datetime.now(UTC)
     run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
@@ -108,11 +112,17 @@ def build_plan(
     holds: list[PlanHold] = []
 
     for index, item in enumerate(scan_result.items, start=1):
+        label = _item_sources(item)[0].name
         if on_item is not None:
-            on_item(index, total, _item_sources(item)[0].name)
+            on_item(index, total, label)
 
         evidence = identify_item(item)
+        start = time.monotonic()
         verdict, unresolved_reason = resolve(item, evidence, config)
+        elapsed = time.monotonic() - start
+        if on_resolved is not None:
+            on_resolved(index, total, label, elapsed)
+
         decision = gate_item(item, evidence, verdict, config, unresolved_reason=unresolved_reason)
 
         if verdict is not None and verdict.source == "llm":
@@ -124,6 +134,7 @@ def build_plan(
                 name=verdict.name_hint or "",
                 confidence=verdict.confidence,
                 reason=verdict.reason,
+                latency_s=elapsed,
                 suggest_delete=verdict.suggest_delete,
                 outcome="moved" if isinstance(decision, MoveDecision) else "held",
                 prompt_version=PROMPT_VERSION,

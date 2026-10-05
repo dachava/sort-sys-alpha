@@ -25,6 +25,9 @@ app = typer.Typer(
 )
 
 
+SLOW_RESOLVE_THRESHOLD_S = 0.1
+
+
 def _progress(index: int, total: int, label: str) -> None:
     # To stderr, not stdout: `resolve()` can mean a real synchronous LLM
     # call per file, so without this there's no output at all until every
@@ -32,6 +35,15 @@ def _progress(index: int, total: int, label: str) -> None:
     # a hang. Kept off stdout so scripts piping plan/run's summary lines
     # aren't affected.
     typer.echo(f"[{index}/{total}] {label}", err=True)
+
+
+def _resolved(index: int, total: int, label: str, elapsed_s: float) -> None:
+    # Only the ones that took real time: rule-tier hits are sub-millisecond
+    # and reporting every one of those would just double the output for no
+    # information. Anything slow enough to notice (an LLM call) is well
+    # above this threshold.
+    if elapsed_s >= SLOW_RESOLVE_THRESHOLD_S:
+        typer.echo(f"[{index}/{total}] {label} took {elapsed_s:.1f}s", err=True)
 
 
 @app.command()
@@ -56,7 +68,7 @@ def plan(
 ) -> None:
     """Produce plan.json + report.md."""
     config = load_config(config_path)
-    the_plan = build_plan(config, on_item=_progress)
+    the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
     typer.echo(f"{len(the_plan.moves)} to move, {len(the_plan.holds)} held.")
     typer.echo(f"plan: {plan_path}")
@@ -88,7 +100,7 @@ def run(
 ) -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
     config = load_config(config_path)
-    the_plan = build_plan(config, on_item=_progress)
+    the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
 
     if config.schedule.mode == "plan":

@@ -2,9 +2,19 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from sort_sys_alpha.cli import app
+from sort_sys_alpha.cli import _resolved, app
 
 runner = CliRunner()
+
+
+def test_resolved_only_prints_above_the_slow_threshold(capsys) -> None:
+    _resolved(1, 10, "fast.txt", 0.001)
+    assert capsys.readouterr().err == ""
+
+    _resolved(2, 10, "slow.xyz", 3.456)
+    err = capsys.readouterr().err
+    assert "[2/10] slow.xyz" in err
+    assert "3.5s" in err
 
 
 def _write_config(tmp_path: Path, source: Path, **extra_lines: str) -> Path:

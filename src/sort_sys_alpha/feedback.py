@@ -42,6 +42,10 @@ class RoutingEntry(BaseModel):
     reason: str
     suggest_delete: bool = False
     outcome: Outcome
+    # None for entries written before this field existed, or for a
+    # corrected/undone record that just copies the original verdict's
+    # fields -- those aren't a fresh LLM call, so there's nothing to time.
+    latency_s: float | None = None
 
 
 def _routing_path(config: Config) -> Path:
@@ -91,12 +95,16 @@ def record_verdict(
     outcome: Literal["moved", "held"],
     prompt_version: str,
     config: Config,
+    latency_s: float | None = None,
 ) -> None:
     """Called once per LLM-tier verdict at plan time (PLAN.md 4.10): "every
     verdict ever made". `name` is the model's raw proposed slug (the `name`
     field of its JSON reply), not the gate's final templated filename --
     that's what gets shown back as a few-shot example, in the same shape the
-    model is asked to produce.
+    model is asked to produce. `latency_s` is wall-clock time for the
+    `resolve()` call that produced this verdict -- real data for comparing
+    models/backends, same idea as `evaluate.py`'s latency numbers, but from
+    actual runs instead of the fixture set.
     """
     append_routing_entry(
         RoutingEntry(
@@ -113,6 +121,7 @@ def record_verdict(
             reason=reason,
             suggest_delete=suggest_delete,
             outcome=outcome,
+            latency_s=latency_s,
         ),
         config,
     )

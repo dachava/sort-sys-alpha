@@ -111,6 +111,49 @@ def test_build_plan_reports_progress_per_item(tmp_path: Path) -> None:
     assert [c[0] for c in calls] == [1, 2]
 
 
+def test_build_plan_reports_elapsed_time_per_item(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    (config.source / "notes.txt").write_text("hi")
+
+    calls: list[tuple[int, int, str, float]] = []
+
+    def _on_resolved(i: int, total: int, label: str, elapsed: float) -> None:
+        calls.append((i, total, label, elapsed))
+
+    build_plan(config, on_resolved=_on_resolved)
+
+    assert len(calls) == 1
+    index, total, label, elapsed = calls[0]
+    assert (index, total, label) == (1, 1, "notes.txt")
+    assert elapsed >= 0.0
+
+
+def test_build_plan_records_latency_for_an_llm_verdict(tmp_path: Path, fake_llm_server) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+    )
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.9,
+                "reason": "looks like a document",
+            }
+        )
+    )
+
+    build_plan(config)
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].latency_s is not None
+    assert entries[0].latency_s >= 0.0
+
+
 def test_build_plan_includes_scan_skips_as_holds(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "partial.crdownload").write_bytes(b"\x00")

@@ -55,6 +55,47 @@ def test_record_verdict_round_trips(tmp_path: Path) -> None:
     assert entries[0].backend == "ollama"
 
 
+def test_record_verdict_stores_latency(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    record_verdict(
+        run_id="run1",
+        move_root=tmp_path / "a.xyz",
+        evidence=_evidence(),
+        category="Documents",
+        name="a-mystery-file",
+        confidence=0.9,
+        reason="looks like a document",
+        suggest_delete=False,
+        outcome="moved",
+        prompt_version="v1",
+        config=config,
+        latency_s=2.5,
+    )
+
+    entries = read_routing_entries(config)
+    assert entries[0].latency_s == 2.5
+
+
+def test_reading_an_entry_written_before_latency_existed_still_works(tmp_path: Path) -> None:
+    # routing.jsonl is append-only and long-lived -- older lines written
+    # before `latency_s` existed must keep parsing rather than crashing
+    # every future `plan`/`eval` run that reads history back.
+    config = _config(tmp_path)
+    path = config.dest / ".sort-sys-alpha" / "routing.jsonl"
+    path.parent.mkdir(parents=True)
+    old_line = (
+        '{"run_id": "run1", "timestamp": "2026-01-01T00:00:00Z", '
+        '"move_root": "a.xyz", "backend": "ollama", "model": "test", '
+        '"prompt_version": "v1", "evidence": {}, "category": "Documents", '
+        '"name": "a", "confidence": 0.9, "reason": "r", "outcome": "moved"}'
+    )
+    path.write_text(old_line + "\n")
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].latency_s is None
+
+
 def test_held_verdicts_are_not_treated_as_accepted(tmp_path: Path) -> None:
     config = _config(tmp_path)
     _record(config, tmp_path / "a.xyz", outcome="held")
