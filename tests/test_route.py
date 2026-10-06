@@ -67,6 +67,27 @@ def test_extension_only_console_still_routes(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/snes"
 
 
+def test_unverified_genesis_md_falls_back_to_note(tmp_path: Path) -> None:
+    """.md doubles as a Markdown extension and a Genesis ROM extension;
+    RomExtractor claims it first, but without the SEGA header it's almost
+    certainly just a Markdown file, not a genuine (if corrupt) ROM.
+    """
+    path = tmp_path / "networking.md"
+    path.write_text("# Networking\n\nSome docs about ports and VLANs.\n")
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Documents/Notes"
+    assert verdict.confidence == 1.0
+
+
+def test_verified_genesis_rom_with_md_extension_still_routes(tmp_path: Path) -> None:
+    path = tmp_path / "game.md"
+    rom = bytearray(0x200)
+    rom[0x100:0x104] = b"SEGA"
+    path.write_bytes(bytes(rom))
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/genesis"
+
+
 def test_generic_iso_routes_to_isos(tmp_path: Path) -> None:
     from fixtures.make import make_iso9660
 

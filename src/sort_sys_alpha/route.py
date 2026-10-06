@@ -123,6 +123,15 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
             folder = f"ROMs/{console}"
             if folder in allowlist:
                 return RouteVerdict(folder, 1.0, f"{console} ROM, header-verified={verified}")
+        # ".md" doubles as a Genesis/Mega Drive ROM extension and as
+        # Markdown, and RomExtractor claims it first (PLAN.md 4.3: first
+        # matching extractor wins). An unverified "genesis" console here
+        # almost always means this was never a ROM at all -- a real
+        # Markdown file -- so it falls back to the note rule instead of
+        # reaching the LLM with misleading "this might be a ROM" evidence.
+        if evidence.extension in NOTE_EXTENSIONS:
+            reason = "note (not a verified ROM despite extension)"
+            return RouteVerdict("Documents/Notes", 1.0, reason)
         return None
 
     if kind == "disk_image":
