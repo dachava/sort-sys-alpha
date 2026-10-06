@@ -16,6 +16,22 @@ def test_extracted_app_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "Installers"
 
 
+def test_extracted_app_with_incidental_bin_is_still_a_unit(tmp_path: Path) -> None:
+    """A stray `.bin` (e.g. Chromium's v8_context_snapshot.bin) shouldn't
+    make an otherwise-ordinary extracted app look like an unresolved disc
+    dump and get held instead of recognized as Installers.
+    """
+    root = tmp_path / "chrome-win"
+    root.mkdir()
+    (root / "chrome.exe").write_bytes(b"\x00")
+    (root / "chrome_elf.dll").write_bytes(b"\x00")
+    (root / "v8_context_snapshot.bin").write_bytes(b"\x00" * 100)
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "Installers"
+
+
 def test_code_project_is_a_unit_in_other(tmp_path: Path) -> None:
     root = tmp_path / "myrepo"
     root.mkdir()
@@ -49,10 +65,29 @@ def test_disc_dump_with_identifiable_console_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "ROMs/ps2"
 
 
-def test_disc_dump_without_identifiable_console_is_unsure(tmp_path: Path) -> None:
+def test_lone_unidentifiable_bin_is_a_grab_bag(tmp_path: Path) -> None:
+    """A bare `.bin` with no disc sheet and no identifiable console isn't
+    trusted as "this folder is a disc dump" on its own -- too many ordinary
+    non-disc files use that extension (see DISC_SHEET_EXTENSIONS above) --
+    so it falls through to grab_bag and gets processed like any other
+    unidentified file, rather than holding the whole folder hostage.
+    """
     root = tmp_path / "MyGame"
     root.mkdir()
     (root / "disc.bin").write_bytes(b"\x00" * 100)
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "grab_bag"
+
+
+def test_disc_sheet_without_identifiable_console_is_unsure(tmp_path: Path) -> None:
+    """Unlike a bare `.bin`, a `.gdi`/`.m3u`/`.ccd` sheet has no non-disc
+    use, so failing to identify its console is still a whole-folder hold.
+    """
+    root = tmp_path / "MyGame"
+    root.mkdir()
+    (root / "disc.gdi").write_text("4\n")
+    (root / "track01.bin").write_bytes(b"\x00" * 100)
 
     result = classify_subfolder(root, Config())
     assert result.verdict == "unsure"
@@ -73,6 +108,23 @@ def test_psx_bin_cue_folder_is_a_unit(tmp_path: Path) -> None:
     result = classify_subfolder(root, Config())
     assert result.verdict == "unit"
     assert result.category == "ROMs/psx"
+
+
+def test_cartridge_rom_with_incidental_bin_splits_as_grab_bag(tmp_path: Path) -> None:
+    """A genuine cartridge dump (Genesis .md, header-verified) sitting next
+    to an unrelated `.bin` (a save file, a diff, whatever) isn't a single
+    coherent unit -- it should split rather than get held as an unresolved
+    disc dump, so the actual ROM still gets classified once split out.
+    """
+    root = tmp_path / "blacktiger_MD_v1.7"
+    root.mkdir()
+    rom = bytearray(0x200)
+    rom[0x100:0x104] = b"SEGA"
+    (root / "Black Tiger.md").write_bytes(bytes(rom))
+    (root / "Black Tiger.bin").write_bytes(b"\x00" * 50)
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "grab_bag"
 
 
 def test_single_type_folder_of_images_is_a_unit(tmp_path: Path) -> None:
@@ -199,7 +251,8 @@ def test_process_subfolder_unit_carries_suggest_delete(tmp_path: Path) -> None:
 def test_process_subfolder_unsure_is_held_whole(tmp_path: Path) -> None:
     root = tmp_path / "MyGame"
     root.mkdir()
-    (root / "disc.bin").write_bytes(b"\x00" * 10)
+    (root / "disc.gdi").write_text("4\n")
+    (root / "track01.bin").write_bytes(b"\x00" * 10)
 
     items, held, grab_bags = process_subfolder(root, Config())
     assert items == []

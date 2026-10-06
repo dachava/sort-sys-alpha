@@ -23,12 +23,22 @@ ALBUM_AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".wav", ".m4a", ".aac", ".wma
 # ".cue" deliberately excluded: it pairs with either audio tracks (an album,
 # handled by _has_album_markers) or binary tracks (a disc dump) — treating it
 # as its own disc signal would flag every album as a conflicting "unsure".
-DISC_MARKER_EXTENSIONS = {".gdi", ".m3u", ".ccd", ".iso", ".bin", ".img"}
-# ".cue"/".gdi"/".ccd" are sheets, not the disc image itself, so they never
-# resolve to a console on their own -- they're kept here only so a folder
-# with *just* a sheet (no .iso/.bin/.img yet) still counts as a disc marker
-# via _has_disc_markers, rather than silently falling through to grab_bag.
-DISC_IDENTIFY_EXTENSIONS = {".iso", ".img", ".bin", ".cue", ".gdi", ".ccd"}
+# ".gdi"/".m3u"/".ccd" have no legitimate non-disc use, so finding one and
+# failing to identify a console is still a real "disc dump, unsure"
+# situation worth holding the whole folder over. ".iso"/".bin"/".img" don't
+# get that trust: those extensions cover plenty of ordinary non-disc files
+# (a save file next to a cartridge ROM, a V8 snapshot blob in an extracted
+# browser build...), so on their own they're not treated as a disc signal
+# at all -- only as something _disc_console_category tries, same as the
+# sheet extensions. See _has_disc_sheet / _has_ambiguous_disc_extension.
+# ".cue" deliberately excluded from DISC_SHEET_EXTENSIONS: it pairs with
+# either audio tracks (an album, handled by _has_album_markers) or binary
+# tracks (a disc dump) -- treating it as its own disc signal would flag
+# every album as a conflicting "unsure". It's still tried for console
+# identification below, same as the others.
+DISC_SHEET_EXTENSIONS = {".gdi", ".m3u", ".ccd"}
+AMBIGUOUS_DISC_EXTENSIONS = {".iso", ".bin", ".img"}
+DISC_IDENTIFY_EXTENSIONS = DISC_SHEET_EXTENSIONS | AMBIGUOUS_DISC_EXTENSIONS | {".cue"}
 
 
 @dataclass(frozen=True)
@@ -84,9 +94,14 @@ def _has_album_markers(entries: list[Path]) -> bool:
     return bool(exts & ALBUM_AUDIO_EXTENSIONS) and ".cue" in exts
 
 
-def _has_disc_markers(entries: list[Path]) -> bool:
+def _has_disc_sheet(entries: list[Path]) -> bool:
     exts = {p.suffix.lower() for p in entries if p.is_file()}
-    return bool(exts & DISC_MARKER_EXTENSIONS)
+    return bool(exts & DISC_SHEET_EXTENSIONS)
+
+
+def _has_ambiguous_disc_extension(entries: list[Path]) -> bool:
+    exts = {p.suffix.lower() for p in entries if p.is_file()}
+    return bool(exts & AMBIGUOUS_DISC_EXTENSIONS)
 
 
 def _disc_console_category(entries: list[Path], config: Config) -> str | None:
@@ -133,11 +148,12 @@ def classify_subfolder(root: Path, config: Config) -> Classification:
         signals.append(("Installers", "extracted app markers"))
     if _has_album_markers(entries):
         signals.append(("Audio", "album markers (audio + cue sheet)"))
-    if _has_disc_markers(entries):
+    has_disc_sheet = _has_disc_sheet(entries)
+    if has_disc_sheet or _has_ambiguous_disc_extension(entries):
         console_category = _disc_console_category(entries, config)
         if console_category:
             signals.append((console_category, "disc/game dump, console identified"))
-        else:
+        elif has_disc_sheet:
             return Classification("unsure", None, "disc/game dump, console not determined")
 
     if len(signals) > 1:
