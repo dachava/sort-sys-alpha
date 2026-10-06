@@ -106,6 +106,38 @@ def test_console_disc_routes_to_roms(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/ps2"
 
 
+def test_ps2_disc_with_dat_match_uses_canonical_title(tmp_path: Path) -> None:
+    from fixtures.make import make_iso9660
+
+    dat_path = tmp_path / "ps2.dat"
+    dat_path.write_text(
+        'game (\n  name ".Hack - Infection (USA)"\n  serial "SLUS-20267"\n'
+        '  rom (\n    serial "SLUS-20267"\n    name ".Hack - Infection (USA).cue"\n  )\n)\n'
+    )
+    path = tmp_path / "game.iso"
+    system_cnf = b"BOOT2 = cdrom0:\\SLUS_202.67;1\r\n"
+    make_iso9660(path, volume_id="HACK", root_files={"SYSTEM.CNF": system_cnf})
+
+    config = Config.model_validate({"roms": {"dat_files": {"ps2": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/ps2"
+    assert verdict.name_hint == ".Hack - Infection (USA)"
+
+
+def test_ps2_disc_with_no_dat_match_falls_back_to_volume_label(tmp_path: Path) -> None:
+    from fixtures.make import make_iso9660
+
+    dat_path = tmp_path / "ps2.dat"
+    dat_path.write_text('game (\n  name "Other Game"\n  serial "SLUS-99999"\n)\n')
+    path = tmp_path / "game.iso"
+    system_cnf = b"BOOT2 = cdrom0:\\SLUS_202.67;1\r\n"
+    make_iso9660(path, volume_id="HACK_VOL", root_files={"SYSTEM.CNF": system_cnf})
+
+    config = Config.model_validate({"roms": {"dat_files": {"ps2": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.name_hint == "HACK_VOL"
+
+
 def test_archive_routes_to_archives(tmp_path: Path) -> None:
     from fixtures.make import make_zip
 

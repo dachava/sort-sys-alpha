@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .config import Config, Rule
+from .dat import lookup_title
 from .identify.archives import console_from_zip_members
 from .identify.audio_video import AUDIO_EXTENSIONS
 from .identify.roms import single_console_from_members
@@ -139,7 +140,11 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
         if console:
             folder = f"ROMs/{console}"
             if folder in allowlist:
-                return RouteVerdict(folder, 1.0, f"{console} disc", details.get("volume_label"))
+                serial = details.get("serial")
+                title = lookup_title(console, serial, config.roms.dat_files) if serial else None
+                name_hint = title or details.get("volume_label")
+                reason = f"{console} disc, DAT match: {title}" if title else f"{console} disc"
+                return RouteVerdict(folder, 1.0, reason, name_hint)
             return None
         if details.get("disc_kind") == "iso9660":
             return RouteVerdict("ISOs", 1.0, "generic ISO image", details.get("volume_label"))

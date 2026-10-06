@@ -88,6 +88,17 @@ class FoldersConfig(BaseModel):
 
 class RomsConfig(BaseModel):
     consoles: list[str] = Field(default_factory=lambda: list(DEFAULT_CONSOLES))
+    # Console -> local DAT file path, for exact-title matching (PLAN.md M7,
+    # ADR 0007). A console with no entry here just keeps today's behavior
+    # (volume label as the name hint).
+    dat_files: dict[str, Path] = Field(default_factory=dict)
+
+    @field_validator("dat_files", mode="before")
+    @classmethod
+    def _expand_dat_paths(cls, value: dict[str, str] | None) -> dict[str, str]:
+        if not value:
+            return {}
+        return {console: str(Path(path).expanduser()) for console, path in value.items()}
 
 
 class SubfoldersConfig(BaseModel):

@@ -197,8 +197,10 @@ template needs but nobody could fill → the file is held (it's not renamed with
 - `.iso` / `.bin` / `.chd`: a console disc signature sends the file to `ROMs\<console>`. No signature: a PC/Linux/software disc goes to `ISOs\`.
 - `.zip` / `.7z`: if the members are ROMs of a single console, the archive goes to `ROMs\<console>` (it stays zipped). Otherwise it goes to `Archives\`.
 - Arcade sets (MAME/FBNeo zips) can't be identified from headers, so they're held until DAT matching exists.
-- **Later milestone:** exact identification by hashing (CRC32/SHA1) against No-Intro/Redump DAT files kept locally. This gives exact
-  titles, regions and the standard names for the naming template.
+- **DAT matching (M7, started):** PS1/PS2/PSP discs get an exact title by looking up the serial read from
+  `SYSTEM.CNF` against a local libretro "Data Center" DAT file (`roms.dat_files`, ADR 0007) -- that format
+  keys on serial number, not a content hash, so no CRC32/SHA1 hashing happens yet. A genuine
+  No-Intro/Redump hash-keyed DAT (for cartridge ROMs, and arcade sets) is separate, not-yet-built scope.
 
 ### 4.10 Outputs (in `<dest>\.sort-sys-alpha\`)
 | File | Purpose |
@@ -266,6 +268,11 @@ allow = ["Images", "Audio", "Documents", "Documents/Notes", "Documents/Logs",
 consoles = ["nes", "snes", "n64", "gb", "gbc", "gba", "nds", "gc", "wii",
             "psx", "ps2", "psp", "genesis", "saturn", "dreamcast"]   # extend as needed
 
+[roms.dat_files]
+# console = local path to a serial-keyed DAT file (ADR 0007); a console
+# with no entry here keeps today's behavior (ISO volume label as the name)
+ps2 = "~/dat/ps2.dat"
+
 [[rules]]
 match = { ext = [".txt", ".md"] }
 folder = "Documents/Notes"            # unless log detection says it's a log
@@ -328,7 +335,7 @@ sort-sys-alpha/
 | M4 | Windows: Zone.Identifier, lock detection, Scheduled Task script (runs only when the PC is idle, so it doesn't compete with games for the GPU), `auto`/`plan` modes, toast notifications | weekly run on the real PC in both modes |
 | M5 | Feedback + `eval` | accuracy and latency for 2–3 models × Ollama vs Lemonade |
 | M6 | Vision (images, scanned PDFs), blog post | — |
-| M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs |
+| M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs -- PS1/PS2/PSP serial matching done (ADR 0007); CRC-hashed cartridge/arcade DATs still open |
 | M8 | Naming conventions: per-category templates, field extraction, rename-only runs | every filed name matches its template |
 
 ## 11. Decisions

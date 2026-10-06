@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..dat import normalize_serial
 from .base import Extractor
 from .discs import LOGICAL_SECTOR_SIZE, open_logical_view
 from .iso9660 import PrimaryVolumeDescriptor, list_root_entries, read_pvd, read_root_file
@@ -48,11 +49,15 @@ BOOT_MAGIC_SCAN_SECTORS = 200
 PREVIEW_BYTES = 512
 
 
-def _ps1_or_ps2(f: Any, pvd: PrimaryVolumeDescriptor) -> str:
-    """SYSTEM.CNF's boot line is `BOOT2 = ...` on PS2 discs, `BOOT = ...` on PS1."""
+def _ps1_or_ps2(f: Any, pvd: PrimaryVolumeDescriptor) -> tuple[str, str | None]:
+    """SYSTEM.CNF's boot line is `BOOT2 = ...` on PS2 discs, `BOOT = ...` on
+    PS1, and names the boot executable by serial (e.g.
+    `cdrom0:\\SLUS_202.67;1`) -- which DAT lookups (dat.py) key on.
+    """
     content = read_root_file(f, pvd, "SYSTEM.CNF") or b""
     text = content.decode("ascii", errors="replace").upper()
-    return "ps2" if "BOOT2" in text else "psx"
+    console = "ps2" if "BOOT2" in text else "psx"
+    return console, normalize_serial(text)
 
 
 def _boot_magic_console(view: Any) -> str | None:
@@ -91,7 +96,8 @@ def console_from_disc_stream(f: Any) -> str | None:
         return _boot_magic_console(view)
     root_entries = list_root_entries(view, pvd)
     if root_entries & PS_MARKERS:
-        return _ps1_or_ps2(view, pvd)
+        console, _serial = _ps1_or_ps2(view, pvd)
+        return console
     if root_entries & PSP_MARKERS:
         return "psp"
     return None
@@ -135,7 +141,10 @@ class DiskImageExtractor(Extractor):
                 root_entries = list_root_entries(view, pvd)
                 result: dict[str, Any] = {"volume_label": pvd.volume_id or None}
                 if root_entries & PS_MARKERS:
-                    result["console"] = _ps1_or_ps2(view, pvd)
+                    console, serial = _ps1_or_ps2(view, pvd)
+                    result["console"] = console
+                    if serial:
+                        result["serial"] = serial
                     result["disc_kind"] = "playstation"
                 elif root_entries & PSP_MARKERS:
                     result["console"] = "psp"
