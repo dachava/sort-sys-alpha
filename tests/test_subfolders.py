@@ -32,6 +32,21 @@ def test_portable_exe_with_batch_helpers_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "Installers"
 
 
+def test_script_only_folder_is_a_unit(tmp_path: Path) -> None:
+    """The matching .exe can end up as a sibling loose file, filed into
+    Installers on its own by the rules tier, with no .exe left inside this
+    folder at all -- a folder of nothing but helper scripts is still tool
+    support material, not personal content worth holding or splitting.
+    """
+    root = tmp_path / "chdman"
+    root.mkdir()
+    (root / "chd2cue.bat").write_text("chdman.exe extractcd %1 %2\n")
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "Installers"
+
+
 def test_extracted_app_with_incidental_bin_is_still_a_unit(tmp_path: Path) -> None:
     """A stray `.bin` (e.g. Chromium's v8_context_snapshot.bin) shouldn't
     make an otherwise-ordinary extracted app look like an unresolved disc

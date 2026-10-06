@@ -23,6 +23,12 @@ EXTRACTED_APP_MARKER_NAME = "setup.exe"
 # helper scripts, no .dll and no installer -- still "data needed for
 # execution" that has to move as one folder, same as an app with .dll.
 EXTRACTED_APP_COMPANION_EXTENSIONS = {".dll", ".bat", ".cmd"}
+# A folder of nothing but helper scripts, with no .exe alongside (the .exe
+# landed elsewhere -- a sibling loose file, already filed into Installers
+# on its own by the rules tier, or just missing from this particular
+# download) is still tool support material, not personal content, so it
+# gets the same destination rather than being split and held per-script.
+SCRIPT_ONLY_EXTENSIONS = {".bat", ".cmd", ".ps1", ".sh"}
 ALBUM_AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".wav", ".m4a", ".aac", ".wma"}
 # ".cue" deliberately excluded: it pairs with either audio tracks (an album,
 # handled by _has_album_markers) or binary tracks (a disc dump) — treating it
@@ -91,6 +97,14 @@ def _has_extracted_app_markers(entries: list[Path]) -> bool:
         return True
     exts = {p.suffix.lower() for p in files}
     return ".exe" in exts and bool(exts & EXTRACTED_APP_COMPANION_EXTENSIONS)
+
+
+def _is_script_only_folder(entries: list[Path]) -> bool:
+    files = [p for p in entries if p.is_file()]
+    if not files:
+        return False
+    exts = {p.suffix.lower() for p in files}
+    return exts <= SCRIPT_ONLY_EXTENSIONS
 
 
 def _has_album_markers(entries: list[Path]) -> bool:
@@ -164,6 +178,8 @@ def classify_subfolder(root: Path, config: Config) -> Classification:
         signals.append(("Other", "code project markers"))
     if _has_extracted_app_markers(entries):
         signals.append(("Installers", "extracted app markers"))
+    elif _is_script_only_folder(entries):
+        signals.append(("Installers", "script-only folder (tool helper scripts)"))
     if _has_album_markers(entries):
         signals.append(("Audio", "album markers (audio + cue sheet)"))
 
