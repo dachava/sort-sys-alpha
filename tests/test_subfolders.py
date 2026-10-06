@@ -58,6 +58,23 @@ def test_disc_dump_without_identifiable_console_is_unsure(tmp_path: Path) -> Non
     assert result.verdict == "unsure"
 
 
+def test_psx_bin_cue_folder_is_a_unit(tmp_path: Path) -> None:
+    from fixtures.make import _build_raw_cd_bin
+
+    root = tmp_path / "Castlevania - Symphony of the Night (USA)"
+    root.mkdir()
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    raw = _build_raw_cd_bin("SOTN", {"SYSTEM.CNF": system_cnf}, mode=2)
+    (root / "Castlevania - SOTN.bin").write_bytes(raw)
+    (root / "Castlevania - SOTN.cue").write_text(
+        'FILE "Castlevania - SOTN.bin" BINARY\n  TRACK 01 MODE2/2352\n'
+    )
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "ROMs/psx"
+
+
 def test_single_type_folder_of_images_is_a_unit(tmp_path: Path) -> None:
     from fixtures.make import make_png
 

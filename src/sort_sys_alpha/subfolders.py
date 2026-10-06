@@ -24,7 +24,11 @@ ALBUM_AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".wav", ".m4a", ".aac", ".wma
 # handled by _has_album_markers) or binary tracks (a disc dump) — treating it
 # as its own disc signal would flag every album as a conflicting "unsure".
 DISC_MARKER_EXTENSIONS = {".gdi", ".m3u", ".ccd", ".iso", ".bin", ".img"}
-DISC_IDENTIFY_EXTENSIONS = {".iso", ".cue", ".gdi", ".ccd"}
+# ".cue"/".gdi"/".ccd" are sheets, not the disc image itself, so they never
+# resolve to a console on their own -- they're kept here only so a folder
+# with *just* a sheet (no .iso/.bin/.img yet) still counts as a disc marker
+# via _has_disc_markers, rather than silently falling through to grab_bag.
+DISC_IDENTIFY_EXTENSIONS = {".iso", ".img", ".bin", ".cue", ".gdi", ".ccd"}
 
 
 @dataclass(frozen=True)
