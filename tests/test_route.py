@@ -94,6 +94,42 @@ def test_archive_routes_to_archives(tmp_path: Path) -> None:
     assert verdict.category == "Archives"
 
 
+def test_zip_of_single_console_roms_routes_to_console_folder(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "snes-collection.zip"
+    make_zip(path, {"Chrono Trigger.sfc": b"\x00" * 10, "Earthbound.sfc": b"\x00" * 10})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/snes"
+
+
+def test_zip_ignores_incidental_non_rom_members(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "snes-game.zip"
+    make_zip(path, {"game.sfc": b"\x00" * 10, "readme.txt": b"hi", "boxart.jpg": b"\xff\xd8"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/snes"
+
+
+def test_zip_of_mixed_consoles_stays_archive(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "mixed.zip"
+    make_zip(path, {"game.sfc": b"\x00" * 10, "other.nes": b"\x00" * 10})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
+def test_zip_with_no_rom_members_stays_archive(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "docs.zip"
+    make_zip(path, {"readme.txt": b"hi", "manual.pdf": b"%PDF-"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
 def test_rar_routes_to_archives(tmp_path: Path) -> None:
     path = tmp_path / "stuff.rar"
     path.write_bytes(b"Rar!\x1a\x07\x01\x00" + b"\x00" * 20)

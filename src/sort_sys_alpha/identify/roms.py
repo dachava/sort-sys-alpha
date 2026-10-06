@@ -28,6 +28,42 @@ N64_MAGICS = {
     b"\x40\x12\x37\x80",  # .n64, byte-swapped 32-bit words
 }
 
+# Extension -> console for files seen only as an archive member listing (no
+# header read, since the bytes are still zipped). Cartridge extensions are
+# unambiguous by construction, same trust level as the loose-file SNES/NDS
+# case below. Disc extensions (.bin/.iso/.cue/...) are deliberately excluded:
+# unlike a cartridge extension, they don't imply a console on their own (see
+# disk_images.py), so a zip of those stays in Archives rather than guessing.
+ZIPPED_ROM_EXTENSION_CONSOLE = {
+    ".nes": "nes",
+    ".gb": "gb",
+    ".gbc": "gbc",
+    ".gba": "gba",
+    ".z64": "n64",
+    ".n64": "n64",
+    ".v64": "n64",
+    ".md": "genesis",
+    ".gen": "genesis",
+    ".sfc": "snes",
+    ".smc": "snes",
+    ".nds": "nds",
+}
+
+
+def single_console_from_members(members: list[str]) -> str | None:
+    """If every ROM-extension member in an archive's listing belongs to one
+    console, return it. Returns None when no member has a recognized ROM
+    extension, or when members span more than one console. Non-ROM members
+    (readme, scan, cover art) are ignored rather than disqualifying the
+    match -- those routinely ride along in ROM-set zips.
+    """
+    consoles = {
+        ZIPPED_ROM_EXTENSION_CONSOLE[Path(name).suffix.lower()]
+        for name in members
+        if not name.endswith("/") and Path(name).suffix.lower() in ZIPPED_ROM_EXTENSION_CONSOLE
+    }
+    return consoles.pop() if len(consoles) == 1 else None
+
 
 def _read_at(path: Path, offset: int, length: int) -> bytes:
     try:

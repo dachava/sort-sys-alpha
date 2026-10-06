@@ -14,6 +14,7 @@ from typing import Literal
 
 from .config import Config, Rule
 from .identify.audio_video import AUDIO_EXTENSIONS
+from .identify.roms import single_console_from_members
 from .identify.types import Evidence
 from .items import FileGroup, FolderUnit, ScanItem
 from .llm.backend import LlmError, backend_for
@@ -102,6 +103,11 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
         )
 
     if kind == "archive":
+        console = single_console_from_members(details.get("members", []))
+        if console:
+            folder = f"ROMs/{console}"
+            if folder in allowlist:
+                return RouteVerdict(folder, 1.0, f"zip of {console} ROMs (members, extension-only)")
         return RouteVerdict("Archives", 1.0, "archive")
 
     if kind == "rom":
