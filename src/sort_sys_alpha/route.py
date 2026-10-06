@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .config import Config, Rule
+from .identify.archives import console_from_zip_members
 from .identify.audio_video import AUDIO_EXTENSIONS
 from .identify.roms import single_console_from_members
 from .identify.types import Evidence
@@ -103,11 +104,16 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
         )
 
     if kind == "archive":
-        console = single_console_from_members(details.get("members", []))
+        members = details.get("members", [])
+        console = single_console_from_members(members)
+        reason = f"zip of {console} ROMs (members, extension-only)" if console else None
+        if console is None:
+            console = console_from_zip_members(evidence.path, members)
+            reason = f"zip containing a {console} disc image" if console else None
         if console:
             folder = f"ROMs/{console}"
             if folder in allowlist:
-                return RouteVerdict(folder, 1.0, f"zip of {console} ROMs (members, extension-only)")
+                return RouteVerdict(folder, 1.0, reason)
         return RouteVerdict("Archives", 1.0, "archive")
 
     if kind == "rom":

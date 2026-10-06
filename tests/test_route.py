@@ -130,6 +130,28 @@ def test_zip_with_no_rom_members_stays_archive(tmp_path: Path) -> None:
     assert verdict.category == "Archives"
 
 
+def test_zip_of_psx_bin_routes_to_roms_psx(tmp_path: Path) -> None:
+    from fixtures.make import _build_raw_cd_bin, make_zip
+
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    raw = _build_raw_cd_bin("GAME", {"SYSTEM.CNF": system_cnf}, mode=2)
+
+    path = tmp_path / "crash-bandicoot.zip"
+    make_zip(path, {"Crash Bandicoot.bin": raw, "Crash Bandicoot.cue": b"junk"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/psx"
+
+
+def test_zip_of_generic_iso_disc_stays_archive(tmp_path: Path) -> None:
+    from fixtures.make import _build_iso9660_image, make_zip
+
+    cooked = _build_iso9660_image("LINUX", None)
+    path = tmp_path / "linux-live.zip"
+    make_zip(path, {"linux.iso": cooked})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
 def test_rar_routes_to_archives(tmp_path: Path) -> None:
     path = tmp_path / "stuff.rar"
     path.write_bytes(b"Rar!\x1a\x07\x01\x00" + b"\x00" * 20)

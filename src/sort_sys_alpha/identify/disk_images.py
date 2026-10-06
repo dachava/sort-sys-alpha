@@ -11,10 +11,21 @@ from pathlib import Path
 from typing import Any
 
 from .base import Extractor
+from .discs import open_logical_view
 from .iso9660 import PrimaryVolumeDescriptor, list_root_entries, read_pvd, read_root_file
 from .types import Evidence
 
-DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg", ".wbfs", ".rvz"}
+# .bin is a raw-sector dump (PLAN.md section 4.9): unlike the others, its
+# extension alone doesn't mean "disc image" (plenty of non-disc .bin files
+# exist), so it's examined the same way but falls back to a byte preview
+# rather than claiming disc_kind when no ISO9660 filesystem turns up.
+DISC_EXTENSIONS = {".iso", ".img", ".gcm", ".nrg", ".wbfs", ".rvz", ".bin"}
+RAW_SECTOR_CANDIDATE_EXTENSIONS = {".bin"}
+
+# The extensions worth inspecting when they turn up *inside* a zip/tar
+# listing (route.py) -- .nrg/.wbfs/.rvz need their own magic-byte checks
+# rather than the ISO9660 reader, so they're not included here.
+DISC_EXTENSIONS_IN_ARCHIVE = {".iso", ".img", ".gcm", ".bin"}
 
 GC_MAGIC = b"\xc2\x33\x9f\x3d"
 WII_MAGIC = b"\x5d\x1c\x9e\xa3"
@@ -24,10 +35,12 @@ RVZ_MAGIC = b"RVZ\x01"
 PS_MARKERS = {"SYSTEM.CNF"}
 PSP_MARKERS = {"PSP_GAME", "UMD_DATA.BIN"}
 
+PREVIEW_BYTES = 512
 
-def _ps1_or_ps2(path: Path, pvd: PrimaryVolumeDescriptor) -> str:
+
+def _ps1_or_ps2(f: Any, pvd: PrimaryVolumeDescriptor) -> str:
     """SYSTEM.CNF's boot line is `BOOT2 = ...` on PS2 discs, `BOOT = ...` on PS1."""
-    content = read_root_file(path, pvd, "SYSTEM.CNF") or b""
+    content = read_root_file(f, pvd, "SYSTEM.CNF") or b""
     text = content.decode("ascii", errors="replace").upper()
     return "ps2" if "BOOT2" in text else "psx"
 
@@ -39,6 +52,25 @@ def _read_at(path: Path, offset: int, length: int) -> bytes:
             return f.read(length)
     except OSError:
         return b""
+
+
+def console_from_disc_stream(f: Any) -> str | None:
+    """PS1/PS2/PSP console from an already-open disc stream (a loose file
+    handle, or a zip member) -- the same ISO9660 inspection as a loose disc
+    file, minus the Nintendo magic-byte checks that only apply to a whole
+    file on disk. Returns None for a generic/unrecognized ISO9660 volume too
+    (plenty of those aren't game discs), not just a non-disc stream.
+    """
+    view = open_logical_view(f)
+    pvd = read_pvd(view)
+    if pvd is None:
+        return None
+    root_entries = list_root_entries(view, pvd)
+    if root_entries & PS_MARKERS:
+        return _ps1_or_ps2(view, pvd)
+    if root_entries & PSP_MARKERS:
+        return "psp"
+    return None
 
 
 class DiskImageExtractor(Extractor):
@@ -65,18 +97,38 @@ class DiskImageExtractor(Extractor):
         if _read_at(path, 0x18, 4) == WII_MAGIC:
             return {"console": "wii", "disc_kind": "wii"}
 
-        pvd = read_pvd(path)
-        if pvd is None:
-            return {"disc_kind": "unknown"}
+        try:
+            with path.open("rb") as f:
+                is_raw = evidence.extension in RAW_SECTOR_CANDIDATE_EXTENSIONS
+                view = open_logical_view(f) if is_raw else f
+                pvd = read_pvd(view)
+                if pvd is None:
+                    return self._not_a_disc(path, evidence)
 
-        root_entries = list_root_entries(path, pvd)
-        result: dict[str, Any] = {"volume_label": pvd.volume_id or None}
-        if root_entries & PS_MARKERS:
-            result["console"] = _ps1_or_ps2(path, pvd)
-            result["disc_kind"] = "playstation"
-        elif root_entries & PSP_MARKERS:
-            result["console"] = "psp"
-            result["disc_kind"] = "psp"
-        else:
-            result["disc_kind"] = "iso9660"
-        return result
+                root_entries = list_root_entries(view, pvd)
+                result: dict[str, Any] = {"volume_label": pvd.volume_id or None}
+                if root_entries & PS_MARKERS:
+                    result["console"] = _ps1_or_ps2(view, pvd)
+                    result["disc_kind"] = "playstation"
+                elif root_entries & PSP_MARKERS:
+                    result["console"] = "psp"
+                    result["disc_kind"] = "psp"
+                else:
+                    result["disc_kind"] = "iso9660"
+                return result
+        except OSError:
+            return self._not_a_disc(path, evidence)
+
+    def _not_a_disc(self, path: Path, evidence: Evidence) -> dict[str, Any]:
+        """`.iso`/`.img`/etc. imply a disc image even without a readable
+        filesystem, so they just stay "unknown". `.bin` doesn't -- most
+        `.bin` files aren't discs at all -- so it falls back to the same
+        byte preview `UnknownExtractor` would give the model, rather than
+        losing that evidence to a claimed-but-empty "disk_image" kind.
+        """
+        if evidence.extension not in RAW_SECTOR_CANDIDATE_EXTENSIONS:
+            return {"disc_kind": "unknown"}
+        raw = _read_at(path, 0, PREVIEW_BYTES)
+        if not raw:
+            return {"disc_kind": "unknown"}
+        return {"disc_kind": "unknown", "hex_preview": raw.hex()}

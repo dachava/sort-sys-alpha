@@ -1,16 +1,17 @@
 """Minimal ISO9660 (ECMA-119) reader: just enough to get the volume label and
 the root directory's entry names, which is all PLAN.md section 4.9 needs to
-tell a PS1/PS2/PSP disc from a generic ISO. No dependency on `pycdlib`.
+tell a PS1/PS2/PSP disc from a generic ISO.
 
-Only handles plain 2048-byte-sector images (CD-ROM mode 1 / DVD). Raw
-CD sector formats (.bin/.cue tracks, .gdi, .ccd) are out of scope here —
-see identify/discs.py.
+Takes any file-like object with `.seek(offset)` / `.read(n)` rather than a
+`Path`, so the same reader works on a loose `.iso` file handle, a
+`discs.LogicalSectorView` over a raw `.bin` dump, or a zip member's stream.
+No dependency on `pycdlib`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from typing import Any
 
 SECTOR_SIZE = 2048
 PVD_SECTOR = 16
@@ -23,11 +24,10 @@ class PrimaryVolumeDescriptor:
     root_data_length: int
 
 
-def read_pvd(path: Path) -> PrimaryVolumeDescriptor | None:
+def read_pvd(f: Any) -> PrimaryVolumeDescriptor | None:
     try:
-        with path.open("rb") as f:
-            f.seek(PVD_SECTOR * SECTOR_SIZE)
-            sector = f.read(SECTOR_SIZE)
+        f.seek(PVD_SECTOR * SECTOR_SIZE)
+        sector = f.read(SECTOR_SIZE)
     except OSError:
         return None
 
@@ -48,11 +48,10 @@ class DirectoryRecord:
     data_length: int
 
 
-def _iter_root_records(path: Path, pvd: PrimaryVolumeDescriptor) -> list[DirectoryRecord]:
+def _iter_root_records(f: Any, pvd: PrimaryVolumeDescriptor) -> list[DirectoryRecord]:
     try:
-        with path.open("rb") as f:
-            f.seek(pvd.root_extent_lba * SECTOR_SIZE)
-            data = f.read(pvd.root_data_length)
+        f.seek(pvd.root_extent_lba * SECTOR_SIZE)
+        data = f.read(pvd.root_data_length)
     except OSError:
         return []
 
@@ -75,23 +74,22 @@ def _iter_root_records(path: Path, pvd: PrimaryVolumeDescriptor) -> list[Directo
     return records
 
 
-def list_root_entries(path: Path, pvd: PrimaryVolumeDescriptor) -> set[str]:
+def list_root_entries(f: Any, pvd: PrimaryVolumeDescriptor) -> set[str]:
     """Names in the root directory, uppercased, with any ";N" version suffix stripped."""
-    return {record.name for record in _iter_root_records(path, pvd)}
+    return {record.name for record in _iter_root_records(f, pvd)}
 
 
-def read_root_file(path: Path, pvd: PrimaryVolumeDescriptor, name: str) -> bytes | None:
+def read_root_file(f: Any, pvd: PrimaryVolumeDescriptor, name: str) -> bytes | None:
     """Read a root-level file's contents by name (case-insensitive, no ";N" needed)."""
-    for record in _iter_root_records(path, pvd):
+    for record in _iter_root_records(f, pvd):
         if record.name == name.upper():
-            return _read_extent(path, record.extent_lba, record.data_length)
+            return _read_extent(f, record.extent_lba, record.data_length)
     return None
 
 
-def _read_extent(path: Path, extent_lba: int, length: int) -> bytes | None:
+def _read_extent(f: Any, extent_lba: int, length: int) -> bytes | None:
     try:
-        with path.open("rb") as f:
-            f.seek(extent_lba * SECTOR_SIZE)
-            return f.read(length)
+        f.seek(extent_lba * SECTOR_SIZE)
+        return f.read(length)
     except OSError:
         return None

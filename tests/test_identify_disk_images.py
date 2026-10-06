@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fixtures.make import make_disc_magic, make_iso9660
+from fixtures.make import make_disc_magic, make_iso9660, make_raw_cd_bin
 
 from sort_sys_alpha.identify import build_evidence
 
@@ -82,3 +82,33 @@ def test_not_an_iso_at_all(tmp_path: Path) -> None:
     evidence = build_evidence(path)
     assert evidence.kind == "disk_image"
     assert evidence.details == {"disc_kind": "unknown"}
+
+
+def test_raw_bin_psx_disc_via_system_cnf_boot(tmp_path: Path) -> None:
+    path = tmp_path / "game.bin"
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(path, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+
+    evidence = build_evidence(path)
+    assert evidence.kind == "disk_image"
+    assert evidence.details["console"] == "psx"
+    assert evidence.details["disc_kind"] == "playstation"
+
+
+def test_raw_bin_ps2_disc_via_system_cnf_boot2_mode1(tmp_path: Path) -> None:
+    path = tmp_path / "game.bin"
+    system_cnf = b"BOOT2 = cdrom0:\\SCES_123.45;1\r\n"
+    make_raw_cd_bin(path, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=1)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "ps2"
+
+
+def test_non_disc_bin_falls_back_to_byte_preview(tmp_path: Path) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"\xde\xad\xbe\xef" * 32)
+
+    evidence = build_evidence(path)
+    assert evidence.kind == "disk_image"
+    assert evidence.details["disc_kind"] == "unknown"
+    assert evidence.details["hex_preview"] == (b"\xde\xad\xbe\xef" * 32).hex()
