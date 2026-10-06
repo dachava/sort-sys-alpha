@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fixtures.make import make_disc_magic, make_iso9660, make_raw_cd_bin
+from fixtures.make import make_boot_magic_bin, make_disc_magic, make_iso9660, make_raw_cd_bin
 
 from sort_sys_alpha.identify import build_evidence
 
@@ -102,6 +102,30 @@ def test_raw_bin_ps2_disc_via_system_cnf_boot2_mode1(tmp_path: Path) -> None:
 
     evidence = build_evidence(path)
     assert evidence.details["console"] == "ps2"
+
+
+def test_saturn_boot_magic_no_pregap(tmp_path: Path) -> None:
+    path = tmp_path / "game.bin"
+    make_boot_magic_bin(path, b"SEGA SEGASATURN", mode=1, pregap_sectors=0)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "saturn"
+
+
+def test_saturn_boot_magic_with_pregap(tmp_path: Path) -> None:
+    path = tmp_path / "game.bin"
+    make_boot_magic_bin(path, b"SEGA SEGASATURN", mode=1, pregap_sectors=150)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "saturn"
+
+
+def test_pce_cd_boot_magic(tmp_path: Path) -> None:
+    path = tmp_path / "game.bin"
+    make_boot_magic_bin(path, b"PC Engine CD-ROM SYSTEM", mode=2, pregap_sectors=0)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "pcenginecd"
 
 
 def test_non_disc_bin_falls_back_to_byte_preview(tmp_path: Path) -> None:

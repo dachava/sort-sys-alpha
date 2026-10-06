@@ -142,6 +142,19 @@ def test_zip_of_psx_bin_routes_to_roms_psx(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/psx"
 
 
+def test_zip_of_saturn_bin_routes_to_roms_saturn(tmp_path: Path) -> None:
+    from fixtures.make import _wrap_raw_sectors, make_zip
+
+    cooked = bytearray(2048)
+    cooked[: len(b"SEGA SEGASATURN")] = b"SEGA SEGASATURN"
+    raw = _wrap_raw_sectors(bytes(cooked), mode=1)
+
+    path = tmp_path / "panzer-dragoon.zip"
+    make_zip(path, {"Panzer Dragoon.bin": raw, "Panzer Dragoon.cue": b"junk"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/saturn"
+
+
 def test_zip_of_generic_iso_disc_stays_archive(tmp_path: Path) -> None:
     from fixtures.make import _build_iso9660_image, make_zip
 

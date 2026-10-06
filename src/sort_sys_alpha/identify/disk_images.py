@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import Extractor
-from .discs import open_logical_view
+from .discs import LOGICAL_SECTOR_SIZE, open_logical_view
 from .iso9660 import PrimaryVolumeDescriptor, list_root_entries, read_pvd, read_root_file
 from .types import Evidence
 
@@ -35,6 +35,16 @@ RVZ_MAGIC = b"RVZ\x01"
 PS_MARKERS = {"SYSTEM.CNF"}
 PSP_MARKERS = {"PSP_GAME", "UMD_DATA.BIN"}
 
+# Saturn and PC-Engine CD don't have an ISO9660 filesystem at all -- each
+# format has its own fixed boot-sector header, normally right at the start
+# of the data track. A rip sometimes keeps that track's 2-second (150
+# logical sector) pregap, which would push the header 150 sectors later, so
+# a generous prefix is scanned for the marker rather than assuming sector 0
+# -- still a deterministic byte signature, just not pinned to one offset.
+SATURN_MAGIC = b"SEGA SEGASATURN"
+PCE_CD_MAGIC = b"PC Engine CD-ROM SYSTEM"
+BOOT_MAGIC_SCAN_SECTORS = 200
+
 PREVIEW_BYTES = 512
 
 
@@ -43,6 +53,19 @@ def _ps1_or_ps2(f: Any, pvd: PrimaryVolumeDescriptor) -> str:
     content = read_root_file(f, pvd, "SYSTEM.CNF") or b""
     text = content.decode("ascii", errors="replace").upper()
     return "ps2" if "BOOT2" in text else "psx"
+
+
+def _boot_magic_console(view: Any) -> str | None:
+    try:
+        view.seek(0)
+        prefix = view.read(BOOT_MAGIC_SCAN_SECTORS * LOGICAL_SECTOR_SIZE)
+    except OSError:
+        return None
+    if SATURN_MAGIC in prefix:
+        return "saturn"
+    if PCE_CD_MAGIC in prefix:
+        return "pcenginecd"
+    return None
 
 
 def _read_at(path: Path, offset: int, length: int) -> bytes:
@@ -55,16 +78,17 @@ def _read_at(path: Path, offset: int, length: int) -> bytes:
 
 
 def console_from_disc_stream(f: Any) -> str | None:
-    """PS1/PS2/PSP console from an already-open disc stream (a loose file
-    handle, or a zip member) -- the same ISO9660 inspection as a loose disc
-    file, minus the Nintendo magic-byte checks that only apply to a whole
-    file on disk. Returns None for a generic/unrecognized ISO9660 volume too
-    (plenty of those aren't game discs), not just a non-disc stream.
+    """PS1/PS2/PSP/Saturn/PC-Engine CD console from an already-open disc
+    stream (a loose file handle, or a zip member) -- the same inspection as
+    a loose disc file, minus the Nintendo magic-byte checks that only apply
+    to a whole file on disk. Returns None for a generic/unrecognized
+    ISO9660 volume too (plenty of those aren't game discs), not just a
+    non-disc stream.
     """
     view = open_logical_view(f)
     pvd = read_pvd(view)
     if pvd is None:
-        return None
+        return _boot_magic_console(view)
     root_entries = list_root_entries(view, pvd)
     if root_entries & PS_MARKERS:
         return _ps1_or_ps2(view, pvd)
@@ -103,6 +127,9 @@ class DiskImageExtractor(Extractor):
                 view = open_logical_view(f) if is_raw else f
                 pvd = read_pvd(view)
                 if pvd is None:
+                    console = _boot_magic_console(view)
+                    if console:
+                        return {"console": console, "disc_kind": console}
                     return self._not_a_disc(path, evidence)
 
                 root_entries = list_root_entries(view, pvd)

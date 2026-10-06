@@ -215,12 +215,11 @@ RAW_SECTOR = 2352
 _SYNC_PATTERN = b"\x00" + b"\xff" * 10 + b"\x00"
 
 
-def _build_raw_cd_bin(volume_id: str, root_files: dict[str, bytes] | None, mode: int = 2) -> bytes:
-    """The same ISO9660 image as `_build_iso9660_image`, re-framed into raw
+def _wrap_raw_sectors(cooked: bytes, mode: int) -> bytes:
+    """Re-frame a stream of plain 2048-byte logical sectors into raw
     2352-byte CD sectors (Mode 1, or Mode 2 Form 1 -- what PS1/PS2 data
     tracks use), the way a `.bin` dump actually stores it on disk.
     """
-    cooked = _build_iso9660_image(volume_id, root_files)
     raw = bytearray()
     for i in range(0, len(cooked), SECTOR):
         chunk = cooked[i : i + SECTOR].ljust(SECTOR, b"\x00")
@@ -231,10 +230,28 @@ def _build_raw_cd_bin(volume_id: str, root_files: dict[str, bytes] | None, mode:
     return bytes(raw)
 
 
+def _build_raw_cd_bin(volume_id: str, root_files: dict[str, bytes] | None, mode: int = 2) -> bytes:
+    """The same ISO9660 image as `_build_iso9660_image`, raw-sector framed."""
+    return _wrap_raw_sectors(_build_iso9660_image(volume_id, root_files), mode)
+
+
 def make_raw_cd_bin(
     path: Path, volume_id: str = "", root_files: dict[str, bytes] | None = None, mode: int = 2
 ) -> None:
     path.write_bytes(_build_raw_cd_bin(volume_id, root_files, mode))
+
+
+def make_boot_magic_bin(
+    path: Path, magic: bytes, mode: int = 2, pregap_sectors: int = 0
+) -> None:
+    """A raw-sector `.bin` with no ISO9660 filesystem at all, carrying
+    `magic` at the start of the data track (Saturn/PC-Engine CD style) --
+    optionally after `pregap_sectors` of silence, simulating a rip that
+    kept the data track's 2-second pregap.
+    """
+    cooked = bytearray(SECTOR * (pregap_sectors + 1))
+    cooked[pregap_sectors * SECTOR : pregap_sectors * SECTOR + len(magic)] = magic
+    path.write_bytes(_wrap_raw_sectors(bytes(cooked), mode))
 
 
 def make_disc_magic(path: Path, offset: int, magic: bytes, total_size: int = SECTOR * 2) -> None:
