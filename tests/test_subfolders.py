@@ -126,6 +126,27 @@ def test_psx_bin_cue_folder_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "ROMs/psx"
 
 
+def test_psx_folder_with_incidental_patcher_still_resolves(tmp_path: Path) -> None:
+    """A romhack release bundling a small patch-applier .exe + .bat
+    alongside the disc dump shouldn't make an otherwise-identified console
+    folder look like a conflict between "disc dump" and "extracted app".
+    """
+    from fixtures.make import _build_raw_cd_bin
+
+    root = tmp_path / "Castlevania - Gekka no Yasoukyoku (Patched)"
+    root.mkdir()
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    raw = _build_raw_cd_bin("SOTN", {"SYSTEM.CNF": system_cnf}, mode=2)
+    (root / "Castlevania.bin").write_bytes(raw)
+    (root / "Castlevania.cue").write_text('FILE "Castlevania.bin" BINARY\n  TRACK 01 MODE2/2352\n')
+    (root / "apply_patch.exe").write_bytes(b"\x00")
+    (root / "run_patcher.bat").write_text("apply_patch.exe\n")
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "ROMs/psx"
+
+
 def test_cartridge_rom_with_incidental_bin_splits_as_grab_bag(tmp_path: Path) -> None:
     """A genuine cartridge dump (Genesis .md, header-verified) sitting next
     to an unrelated `.bin` (a save file, a diff, whatever) isn't a single

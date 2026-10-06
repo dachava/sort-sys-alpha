@@ -145,6 +145,20 @@ def classify_subfolder(root: Path, config: Config) -> Classification:
     if not entries:
         return Classification("grab_bag", None, "empty folder")
 
+    # A positively identified console disc dump is checked first and wins
+    # outright, rather than joining the generic signals below as one more
+    # thing that could "conflict" -- a romhack release routinely bundles a
+    # small patcher .exe + .bat alongside the actual disc dump, and that
+    # incidental extracted-app marker shouldn't make a successfully
+    # identified ROM/console folder ambiguous.
+    has_disc_sheet = _has_disc_sheet(entries)
+    if has_disc_sheet or _has_ambiguous_disc_extension(entries):
+        console_category = _disc_console_category(entries, config)
+        if console_category:
+            return Classification("unit", console_category, "disc/game dump, console identified")
+        if has_disc_sheet:
+            return Classification("unsure", None, "disc/game dump, console not determined")
+
     signals: list[tuple[str, str]] = []
     if _has_code_project_markers(entries):
         signals.append(("Other", "code project markers"))
@@ -152,13 +166,6 @@ def classify_subfolder(root: Path, config: Config) -> Classification:
         signals.append(("Installers", "extracted app markers"))
     if _has_album_markers(entries):
         signals.append(("Audio", "album markers (audio + cue sheet)"))
-    has_disc_sheet = _has_disc_sheet(entries)
-    if has_disc_sheet or _has_ambiguous_disc_extension(entries):
-        console_category = _disc_console_category(entries, config)
-        if console_category:
-            signals.append((console_category, "disc/game dump, console identified"))
-        elif has_disc_sheet:
-            return Classification("unsure", None, "disc/game dump, console not determined")
 
     if len(signals) > 1:
         reasons = ", ".join(reason for _category, reason in signals)
