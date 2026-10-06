@@ -16,6 +16,7 @@ from .journal import last_run_id, undo_run
 from .llm.backend import describe_backend
 from .notify import notify
 from .plan import PLAN_FILENAME, build_plan, load_plan, write_plan
+from .prune import prune_empty_folders
 from .scan import STATE_DIR_NAME
 from .scan import scan as run_scan
 
@@ -171,6 +172,21 @@ def eval_(
     config = load_config(config_path)
     results = run_eval(evals_dir, config, on_case=_progress)
     typer.echo(render_eval_report(results, config))
+
+
+@app.command()
+def prune(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+) -> None:
+    """Remove empty folders under source (recursively). See ADR 0006."""
+    config = load_config(config_path)
+    result = prune_empty_folders(config)
+    if not result.removed:
+        typer.echo("no empty folders found.")
+        return
+    for path in result.removed:
+        typer.echo(f"removed: {path}")
+    typer.echo(f"removed {len(result.removed)} empty folder(s).")
 
 
 @app.command()

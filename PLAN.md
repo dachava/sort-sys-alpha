@@ -80,7 +80,9 @@ Every subfolder of Downloads (except `_Filed`) is classified first as either a *
 - Deterministic markers decide first. The model gets a **listing** (names, sizes, types, first N entries, marker files found) and only
   decides when markers don't settle it. The same 0.75 confidence gate applies.
 - Units go into the existing allowlisted categories: there's no separate "Folders" category.
-- **Empty folders left behind are never deleted.** They stay and are listed in `report.md` under suggested deletions.
+- **Empty folders left behind are never deleted by `plan`/`apply`/`run`.** They stay and are listed in
+  `report.md` under suggested deletions. Removing them is a separate, explicit step: the `prune` command
+  (ADR 0006), run manually, never as part of plan/apply/run.
 - Limits: max depth and max file count per folder (config), so a huge folder is held instead of producing a 5,000-line plan.
 
 ### 4.3 Identify: "what could this be?"
@@ -217,6 +219,7 @@ sort-sys-alpha run                 # plan + apply with gates (what the scheduler
 sort-sys-alpha undo [RUN_ID|last]
 sort-sys-alpha eval                # run the labeled fixture set, print accuracy per category
 sort-sys-alpha doctor              # check model server, config, permissions
+sort-sys-alpha prune               # remove empty folders under source, recursively (ADR 0006)
 ```
 
 ## 6. Feedback loop ("it learns")
@@ -343,7 +346,8 @@ sort-sys-alpha/
 - **Music module:** a note only for now (§12).
 
 - **Subfolders:** sorted too, hybrid: coherent units move intact, grab-bags are split, unsure is held.
-- **Empty folders:** left in place and listed as suggested deletions (never-delete holds).
+- **Empty folders:** left in place by plan/apply/run and listed as suggested deletions; removed only by
+  the separate, manual `prune` command (ADR 0006) -- hard rule 5's one deliberate, scoped exception.
 
 **Still open**
 1. **Naming conventions:** the actual templates per category (needed by M8).

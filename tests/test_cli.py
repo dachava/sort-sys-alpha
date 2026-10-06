@@ -46,7 +46,7 @@ def test_help() -> None:
 
 def test_subcommands_registered() -> None:
     result = runner.invoke(app, ["--help"])
-    for command in ["scan", "plan", "apply", "run", "undo", "eval", "doctor"]:
+    for command in ["scan", "plan", "apply", "run", "undo", "eval", "doctor", "prune"]:
         assert command in result.output
 
 
@@ -193,6 +193,28 @@ def test_doctor_reports_backend_reachability(tmp_path: Path, fake_llm_server) ->
     assert result.exit_code == 0
     assert "source: OK" in result.output
     assert "reachable" in result.output
+
+
+def test_prune_removes_empty_folders(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    (source / "Outer" / "Inner").mkdir(parents=True)
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(app, ["prune", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "removed 2 empty folder(s)." in result.output
+    assert not (source / "Outer").exists()
+
+
+def test_prune_with_nothing_to_remove(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(app, ["prune", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "no empty folders found." in result.output
 
 
 def test_undo_with_no_runs_fails_cleanly(tmp_path: Path) -> None:

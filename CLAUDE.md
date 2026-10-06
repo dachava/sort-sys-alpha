@@ -35,8 +35,12 @@ Lemonade on an RTX 5070 Ti.
    model claims. A prompt change must never be the only thing standing
    between a low-confidence verdict and a move.
 5. **Never delete.** The model may set `suggest_delete: true`; nothing in
-   this codebase acts on that automatically. The only removal that ever
-   happens is the source side of a verified cross-volume move.
+   `plan`/`apply`/`run`/the gate acts on that automatically. The only
+   removal those commands ever perform is the source side of a verified
+   cross-volume move. The one explicit, scoped exception is the manual
+   `prune` command (ADR 0006), which removes folders under `source` that
+   contain zero files at any nested depth — never a file, never part of
+   plan/apply/run, never touching `dest`.
 6. **Every move is journaled before it executes**, so `undo` is always
    possible. If you add a new way for `apply.py` to touch the filesystem, it
    must go through `journal.py` first.
