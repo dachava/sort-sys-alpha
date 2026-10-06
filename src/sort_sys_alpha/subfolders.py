@@ -19,6 +19,10 @@ from .route import route
 
 CODE_PROJECT_MARKER_NAMES = {".git", "package.json", "pyproject.toml"}
 EXTRACTED_APP_MARKER_NAME = "setup.exe"
+# A portable tool (chdman, ffmpeg, ...) ships as one or more .exe plus
+# helper scripts, no .dll and no installer -- still "data needed for
+# execution" that has to move as one folder, same as an app with .dll.
+EXTRACTED_APP_COMPANION_EXTENSIONS = {".dll", ".bat", ".cmd"}
 ALBUM_AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".wav", ".m4a", ".aac", ".wma"}
 # ".cue" deliberately excluded: it pairs with either audio tracks (an album,
 # handled by _has_album_markers) or binary tracks (a disc dump) — treating it
@@ -86,7 +90,7 @@ def _has_extracted_app_markers(entries: list[Path]) -> bool:
     if any(p.name.lower() == EXTRACTED_APP_MARKER_NAME for p in files):
         return True
     exts = {p.suffix.lower() for p in files}
-    return ".exe" in exts and ".dll" in exts
+    return ".exe" in exts and bool(exts & EXTRACTED_APP_COMPANION_EXTENSIONS)
 
 
 def _has_album_markers(entries: list[Path]) -> bool:

@@ -16,6 +16,22 @@ def test_extracted_app_is_a_unit(tmp_path: Path) -> None:
     assert result.category == "Installers"
 
 
+def test_portable_exe_with_batch_helpers_is_a_unit(tmp_path: Path) -> None:
+    """A portable tool (chdman, ffmpeg, ...) has no installer and no .dll,
+    just an .exe plus helper .bat scripts it needs to run -- that's still
+    "data needed for execution" and has to move as one folder, not get
+    split and leave the scripts behind with nothing to route them.
+    """
+    root = tmp_path / "chdman"
+    root.mkdir()
+    (root / "chdman.exe").write_bytes(b"\x00")
+    (root / "chd2cue.bat").write_text("chdman.exe extractcd %1 %2\n")
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "Installers"
+
+
 def test_extracted_app_with_incidental_bin_is_still_a_unit(tmp_path: Path) -> None:
     """A stray `.bin` (e.g. Chromium's v8_context_snapshot.bin) shouldn't
     make an otherwise-ordinary extracted app look like an unresolved disc
