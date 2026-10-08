@@ -23,7 +23,7 @@ LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 STATE_DIR_NAME = ".sort-sys-alpha"
 
 DEFAULT_CONSOLES = [
-    "nes", "snes", "n64", "gb", "gbc", "gba", "nds", "gc", "wii",
+    "nes", "snes", "n64", "gb", "gbc", "gba", "nds", "fds", "gc", "wii",
     "psx", "ps2", "psp", "genesis", "saturn", "dreamcast", "pcenginecd",
 ]
 

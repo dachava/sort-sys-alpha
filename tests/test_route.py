@@ -60,6 +60,19 @@ def test_rom_failed_verification_is_not_routed(tmp_path: Path) -> None:
     assert route(build_evidence(path), Config()) is None
 
 
+def test_fds_header_verified_routes_to_console_folder(tmp_path: Path) -> None:
+    path = tmp_path / "game.fds"
+    path.write_bytes(b"FDS\x1a" + b"\x00" * 50)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/fds"
+
+
+def test_fds_without_signature_is_not_routed(tmp_path: Path) -> None:
+    path = tmp_path / "fake.fds"
+    path.write_bytes(b"\x00" * 50)
+    assert route(build_evidence(path), Config()) is None
+
+
 def test_extension_only_console_still_routes(tmp_path: Path) -> None:
     path = tmp_path / "game.sfc"
     path.write_bytes(b"\x00" * 50)

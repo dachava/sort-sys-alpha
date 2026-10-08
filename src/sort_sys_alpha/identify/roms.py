@@ -20,7 +20,7 @@ from .types import Evidence
 
 ROM_EXTENSIONS = {
     ".nes", ".gb", ".gbc", ".gba", ".z64", ".n64", ".v64",
-    ".md", ".gen", ".sfc", ".smc", ".nds", ".dol",
+    ".md", ".gen", ".sfc", ".smc", ".nds", ".dol", ".fds",
 }
 
 N64_MAGICS = {
@@ -28,6 +28,12 @@ N64_MAGICS = {
     b"\x37\x80\x40\x12",  # .v64, byte-swapped 16-bit words
     b"\x40\x12\x37\x80",  # .n64, byte-swapped 32-bit words
 }
+
+# fwNES-headered dumps start with this 4-byte magic; headerless dumps (more
+# common from modern dumping tools) start directly with the disk's own
+# block-1 marker instead -- either one confirms a real FDS image.
+FDS_HEADERED_MAGIC = b"FDS\x1a"
+FDS_HEADERLESS_MAGIC = b"\x01*NINTENDO-HVC*"
 
 # Extension -> console for files seen only as an archive member listing (no
 # header read, since the bytes are still zipped). Cartridge extensions are
@@ -48,6 +54,7 @@ ZIPPED_ROM_EXTENSION_CONSOLE = {
     ".sfc": "snes",
     ".smc": "snes",
     ".nds": "nds",
+    ".fds": "fds",
 }
 
 
@@ -78,6 +85,11 @@ def _read_at(path: Path, offset: int, length: int) -> bytes:
 def _gb_console(path: Path) -> str:
     cgb_flag = _read_at(path, 0x143, 1)
     return "gbc" if cgb_flag in (b"\x80", b"\xc0") else "gb"
+
+
+def _fds_verified(path: Path) -> bool:
+    header = _read_at(path, 0, len(FDS_HEADERLESS_MAGIC))
+    return header.startswith(FDS_HEADERED_MAGIC) or header.startswith(FDS_HEADERLESS_MAGIC)
 
 
 def _crc32_of(path: Path) -> str:
@@ -132,6 +144,9 @@ class RomExtractor(Extractor):
 
         if ext == ".nds":
             return {"console": "nds", "verified": False, "crc32": crc32}
+
+        if ext == ".fds":
+            return {"console": "fds", "verified": _fds_verified(path), "crc32": crc32}
 
         if ext == ".dol":
             # Wii/GameCube homebrew executable (Dolphin Executable) -- no

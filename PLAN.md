@@ -190,7 +190,7 @@ Fields come from deterministic metadata first (EXIF date, PE version, DAT match)
 template needs but nobody could fill → the file is held (it's not renamed with a gap). The actual conventions are an open decision (§11).
 
 ### 4.9 ROMs and disc images
-- Folders use **EmuDeck/RetroArch names** (`snes`, `nes`, `n64`, `gb`, `gbc`, `gba`, `nds`, `gc`, `wii`, `psx`, `ps2`, `psp`,
+- Folders use **EmuDeck/RetroArch names** (`snes`, `nes`, `n64`, `gb`, `gbc`, `gba`, `nds`, `fds`, `gc`, `wii`, `psx`, `ps2`, `psp`,
   `genesis`, `saturn`, `dreamcast`, …), so `ROMs\` can be copied straight to the Steam Deck. The exact list should be checked
   against EmuDeck's docs when implemented.
 - Detection order: extension → header/disc signature → zip member inspection → model (the model is the last resort, with low default trust).

@@ -117,6 +117,39 @@ def test_dol_is_extension_only_wii(tmp_path: Path) -> None:
     }
 
 
+def test_fds_headered_is_verified(tmp_path: Path) -> None:
+    path = tmp_path / "game.fds"
+    data = b"FDS\x1a" + b"\x00" * 100
+    path.write_bytes(data)
+
+    evidence = build_evidence(path)
+    assert evidence.details == {
+        "console": "fds",
+        "verified": True,
+        "crc32": _crc32_hex(data),
+    }
+
+
+def test_fds_headerless_is_verified(tmp_path: Path) -> None:
+    path = tmp_path / "game.fds"
+    data = b"\x01*NINTENDO-HVC*" + b"\x00" * 100
+    path.write_bytes(data)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "fds"
+    assert evidence.details["verified"] is True
+
+
+def test_fds_without_signature_is_unverified(tmp_path: Path) -> None:
+    path = tmp_path / "not_actually_fds.fds"
+    data = b"\x00" * 100
+    path.write_bytes(data)
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "fds"
+    assert evidence.details["verified"] is False
+
+
 def test_crc32_is_computed_from_full_file_contents(tmp_path: Path) -> None:
     path = tmp_path / "game.nes"
     data = b"NES\x1a" + bytes(range(256)) * 50
