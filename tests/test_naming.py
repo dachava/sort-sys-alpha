@@ -62,6 +62,17 @@ def test_rom_dat_title_is_used_verbatim_not_slugified(tmp_path: Path) -> None:
     assert name == ".Hack - Infection (USA)"
 
 
+def test_per_category_override_falls_back_to_slug(tmp_path: Path) -> None:
+    path = tmp_path / "setup.exe"
+    path.write_bytes(b"\x00")
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("Installers", 1.0, "installer", name_hint="7-Zip 24.08 x64")
+    config = Config.model_validate({"naming": {"Installers": "{slug}"}})
+
+    name = build_name(evidence, verdict, "Installers", config, today=date(2026, 1, 2))
+    assert name == "7-zip-24-08-x64"
+
+
 def test_missing_template_field_raises_naming_error(tmp_path: Path) -> None:
     path = tmp_path / "game.nes"
     path.write_bytes(b"\x00")

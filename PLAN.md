@@ -301,6 +301,10 @@ folder = "Documents/Logs"
 match = { true_type = ["application/x-msdownload", "application/x-msi"] }
 folder = "Installers"
 
+[naming]
+# default is "{title}" (ADR 0010) -- override any category explicitly:
+Installers = "{slug}"     # hyphenated single string, e.g. "7-zip-24-08-x64"
+
 [subfolders]
 mode = "hybrid"          # unit / grab-bag / unsure
 max_depth = 4
