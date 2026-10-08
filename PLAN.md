@@ -194,8 +194,8 @@ is held (it's not renamed with a gap).
 
 ### 4.9 ROMs and disc images
 - Folders use **EmuDeck/RetroArch names** (`snes`, `nes`, `n64`, `gb`, `gbc`, `gba`, `nds`, `fds`, `gc`, `wii`, `psx`, `ps2`, `psp`,
-  `genesis`, `saturn`, `dreamcast`, …), so `ROMs\` can be copied straight to the Steam Deck. The exact list should be checked
-  against EmuDeck's docs when implemented.
+  `genesis`, `saturn`, `dreamcast`, `pcenginecd`, `msx`, `gamegear`, `mastersystem`, `sega32x`, `sg1000`, …), so `ROMs\` can be
+  copied straight to the Steam Deck. The exact list should be checked against EmuDeck's docs when implemented.
 - Detection order: extension → header/disc signature → zip member inspection → model (the model is the last resort, with low default trust).
 - `.iso` / `.bin` / `.chd`: a console disc signature sends the file to `ROMs\<console>`. No signature: a PC/Linux/software disc goes to `ISOs\`.
 - `.zip` / `.7z`: if the members are ROMs of a single console, the archive goes to `ROMs\<console>` (it stays zipped). Otherwise it goes to `Archives\`.

@@ -25,6 +25,7 @@ STATE_DIR_NAME = ".sort-sys-alpha"
 DEFAULT_CONSOLES = [
     "nes", "snes", "n64", "gb", "gbc", "gba", "nds", "fds", "gc", "wii",
     "psx", "ps2", "psp", "genesis", "saturn", "dreamcast", "pcenginecd", "msx",
+    "gamegear", "mastersystem", "sega32x", "sg1000",
 ]
 
 DEFAULT_FOLDERS = [

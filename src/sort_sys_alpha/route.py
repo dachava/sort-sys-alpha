@@ -24,7 +24,7 @@ from .llm.backend import LlmError, backend_for
 # NES/GB/GBC/GBA/N64/Genesis are verified against a header signature;
 # SNES/NDS/.dol-as-wii have no cheap signature (see identify/roms.py), so
 # their console assignment is extension-only by design, not a failed check.
-EXTENSION_ONLY_CONSOLES = {"snes", "nds", "wii"}
+EXTENSION_ONLY_CONSOLES = {"snes", "nds", "wii", "sg1000"}
 
 INSTALLER_EXTENSIONS = {".exe", ".msi"}
 NOTE_EXTENSIONS = {".txt", ".md"}

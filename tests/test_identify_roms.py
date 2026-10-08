@@ -150,6 +150,64 @@ def test_fds_without_signature_is_unverified(tmp_path: Path) -> None:
     assert evidence.details["verified"] is False
 
 
+def test_game_gear_tmr_sega_header_is_verified(tmp_path: Path) -> None:
+    path = tmp_path / "game.gg"
+    data = bytearray(0x8000)
+    data[0x7FF0:0x7FF8] = b"TMR SEGA"
+    path.write_bytes(bytes(data))
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "gamegear"
+    assert evidence.details["verified"] is True
+
+
+def test_master_system_tmr_sega_header_at_fallback_offset(tmp_path: Path) -> None:
+    # A ROM too short for the 0x7FF0 header location falls back to 0x1FF0.
+    path = tmp_path / "game.sms"
+    data = bytearray(0x2000)
+    data[0x1FF0:0x1FF8] = b"TMR SEGA"
+    path.write_bytes(bytes(data))
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "mastersystem"
+    assert evidence.details["verified"] is True
+
+
+def test_sms_gg_without_header_is_unverified(tmp_path: Path) -> None:
+    data = b"\x00" * 0x8000
+    (tmp_path / "fake.gg").write_bytes(data)
+    (tmp_path / "fake.sms").write_bytes(data)
+
+    gg = build_evidence(tmp_path / "fake.gg")
+    sms = build_evidence(tmp_path / "fake.sms")
+    assert gg.details["verified"] is False
+    assert sms.details["verified"] is False
+
+
+def test_sega_32x_header_is_verified(tmp_path: Path) -> None:
+    path = tmp_path / "game.32x"
+    data = bytearray(600)
+    data[0x100:0x108] = b"SEGA 32X"
+    path.write_bytes(bytes(data))
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "sega32x"
+    assert evidence.details["verified"] is True
+
+
+def test_sg1000_is_extension_only(tmp_path: Path) -> None:
+    path = tmp_path / "game.sg"
+    data = b"\x00" * 100
+    path.write_bytes(data)
+
+    evidence = build_evidence(path)
+    assert evidence.details == {
+        "console": "sg1000",
+        "verified": False,
+        "crc32": _crc32_hex(data),
+    }
+
+
 def test_crc32_is_computed_from_full_file_contents(tmp_path: Path) -> None:
     path = tmp_path / "game.nes"
     data = b"NES\x1a" + bytes(range(256)) * 50

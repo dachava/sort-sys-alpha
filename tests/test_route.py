@@ -73,6 +73,37 @@ def test_fds_without_signature_is_not_routed(tmp_path: Path) -> None:
     assert route(build_evidence(path), Config()) is None
 
 
+def test_game_gear_header_verified_routes_to_console_folder(tmp_path: Path) -> None:
+    path = tmp_path / "game.gg"
+    data = bytearray(0x8000)
+    data[0x7FF0:0x7FF8] = b"TMR SEGA"
+    path.write_bytes(bytes(data))
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/gamegear"
+
+
+def test_sega_32x_header_verified_routes_to_console_folder(tmp_path: Path) -> None:
+    path = tmp_path / "game.32x"
+    data = bytearray(600)
+    data[0x100:0x108] = b"SEGA 32X"
+    path.write_bytes(bytes(data))
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/sega32x"
+
+
+def test_sms_without_header_is_not_routed(tmp_path: Path) -> None:
+    path = tmp_path / "fake.sms"
+    path.write_bytes(b"\x00" * 0x8000)
+    assert route(build_evidence(path), Config()) is None
+
+
+def test_sg1000_extension_only_still_routes(tmp_path: Path) -> None:
+    path = tmp_path / "game.sg"
+    path.write_bytes(b"\x00" * 50)
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/sg1000"
+
+
 def test_extension_only_console_still_routes(tmp_path: Path) -> None:
     path = tmp_path / "game.sfc"
     path.write_bytes(b"\x00" * 50)

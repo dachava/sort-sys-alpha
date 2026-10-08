@@ -26,6 +26,7 @@ from .types import Evidence
 ROM_EXTENSIONS = {
     ".nes", ".gb", ".gbc", ".gba", ".z64", ".n64", ".v64",
     ".md", ".gen", ".sfc", ".smc", ".nds", ".dol", ".fds",
+    ".gg", ".sms", ".32x", ".sg",
 }
 
 N64_MAGICS = {
@@ -36,6 +37,19 @@ N64_MAGICS = {
 
 GENESIS_HEADER_OFFSET = 0x100
 GENESIS_MAGIC = b"SEGA"
+# 32X carts are Genesis-slot cartridges with the same 16-byte system-name
+# field at 0x100 Genesis uses for "SEGA MEGA DRIVE "/"SEGA GENESIS    " --
+# a 32X cart's own copy of that field starts "SEGA 32X" instead.
+SEGA_32X_MAGIC = b"SEGA 32X"
+
+# Master System and Game Gear share the same cartridge hardware convention:
+# an optional-by-spec but in-practice-universal 16-byte "TMR SEGA" header,
+# required by Sega's own export BIOSes to accept the cart as valid. Stored
+# at 0x7FF0 in effectively every real dump; smaller ROMs (too short to
+# contain a byte at 0x7FF0 at all) use 0x3FF0 or 0x1FF0 instead, which is
+# why all three are checked rather than assuming one fixed offset.
+TMR_SEGA_MAGIC = b"TMR SEGA"
+TMR_SEGA_OFFSETS = (0x7FF0, 0x3FF0, 0x1FF0)
 
 # fwNES-headered dumps start with this 4-byte magic; headerless dumps (more
 # common from modern dumping tools) start directly with the disk's own
@@ -63,6 +77,10 @@ ZIPPED_ROM_EXTENSION_CONSOLE = {
     ".smc": "snes",
     ".nds": "nds",
     ".fds": "fds",
+    ".gg": "gamegear",
+    ".sms": "mastersystem",
+    ".32x": "sega32x",
+    ".sg": "sg1000",
 }
 
 # ".md" is the one entry above that *isn't* unambiguous -- it's Markdown
@@ -171,6 +189,13 @@ def _fds_verified(path: Path) -> bool:
     return header.startswith(FDS_HEADERED_MAGIC) or header.startswith(FDS_HEADERLESS_MAGIC)
 
 
+def _tmr_sega_verified(path: Path) -> bool:
+    return any(
+        _read_at(path, offset, len(TMR_SEGA_MAGIC)) == TMR_SEGA_MAGIC
+        for offset in TMR_SEGA_OFFSETS
+    )
+
+
 def _crc32_of(path: Path) -> str:
     """Uppercase 8-hex-digit CRC32, matching the libretro-database DAT
     files' own formatting (e.g. "F2EE11F9"), for cartridge-title lookup in
@@ -226,6 +251,22 @@ class RomExtractor(Extractor):
 
         if ext == ".fds":
             return {"console": "fds", "verified": _fds_verified(path), "crc32": crc32}
+
+        if ext == ".gg":
+            return {"console": "gamegear", "verified": _tmr_sega_verified(path), "crc32": crc32}
+
+        if ext == ".sms":
+            return {"console": "mastersystem", "verified": _tmr_sega_verified(path), "crc32": crc32}
+
+        if ext == ".32x":
+            verified = _read_at(path, GENESIS_HEADER_OFFSET, len(SEGA_32X_MAGIC)) == SEGA_32X_MAGIC
+            return {"console": "sega32x", "verified": verified, "crc32": crc32}
+
+        if ext == ".sg":
+            # SG-1000 carts have no header or signature at all -- the Z80
+            # boots straight into cartridge code at 0x0000 -- so unlike
+            # every other console here, there's genuinely nothing to check.
+            return {"console": "sg1000", "verified": False, "crc32": crc32}
 
         if ext == ".dol":
             # Wii/GameCube homebrew executable (Dolphin Executable) -- no
