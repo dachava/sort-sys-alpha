@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .config import Config, Rule
-from .dat import lookup_title
+from .dat import lookup_title, lookup_title_by_crc
 from .identify.archives import console_from_zip_members
 from .identify.audio_video import AUDIO_EXTENSIONS
 from .identify.roms import single_console_from_members
@@ -123,7 +123,16 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
         if console and (verified or console in EXTENSION_ONLY_CONSOLES):
             folder = f"ROMs/{console}"
             if folder in allowlist:
-                return RouteVerdict(folder, 1.0, f"{console} ROM, header-verified={verified}")
+                crc32 = details.get("crc32")
+                title = (
+                    lookup_title_by_crc(console, crc32, config.roms.dat_files) if crc32 else None
+                )
+                reason = (
+                    f"{console} ROM, header-verified={verified}, DAT match: {title}"
+                    if title
+                    else f"{console} ROM, header-verified={verified}"
+                )
+                return RouteVerdict(folder, 1.0, reason, title)
         # ".md" doubles as a Genesis/Mega Drive ROM extension and as
         # Markdown, and RomExtractor claims it first (PLAN.md 4.3: first
         # matching extractor wins). An unverified "genesis" console here

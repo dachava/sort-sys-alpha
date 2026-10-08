@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from sort_sys_alpha.dat import lookup_title, normalize_serial, parse_dat
+from sort_sys_alpha.dat import (
+    lookup_title,
+    lookup_title_by_crc,
+    normalize_serial,
+    parse_crc_dat,
+    parse_dat,
+)
 
 SAMPLE_DAT = """\
 clrmamepro (
@@ -78,3 +84,53 @@ def test_lookup_title_unknown_serial(tmp_path: Path) -> None:
     dat_path.write_text(SAMPLE_DAT)
 
     assert lookup_title("ps2", "SLUS-99999", {"ps2": dat_path}) is None
+
+
+SAMPLE_CRC_DAT = """\
+clrmamepro (
+	name "Nintendo - Super Nintendo Entertainment System"
+	description "Nintendo - Super Nintendo Entertainment System"
+)
+
+game (
+	comment "3 Ninjas Kick Back (USA)"
+	developer "Malibu Games"
+	rom ( crc F2EE11F9 )
+)
+
+game (
+	comment "3-jigen Kakutou Ballz (Japan)"
+	developer "Accolade"
+	rom ( crc F0810694 )
+)
+"""
+
+
+def test_parse_crc_dat_extracts_comment_as_title() -> None:
+    titles = parse_crc_dat(SAMPLE_CRC_DAT)
+    assert titles == {
+        "F2EE11F9": "3 Ninjas Kick Back (USA)",
+        "F0810694": "3-jigen Kakutou Ballz (Japan)",
+    }
+
+
+def test_lookup_title_by_crc_matches_case_insensitively(tmp_path: Path) -> None:
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(SAMPLE_CRC_DAT)
+
+    title = lookup_title_by_crc("snes", "f2ee11f9", {"snes": dat_path})
+    assert title == "3 Ninjas Kick Back (USA)"
+
+
+def test_lookup_title_by_crc_no_console_configured(tmp_path: Path) -> None:
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(SAMPLE_CRC_DAT)
+
+    assert lookup_title_by_crc("nes", "F2EE11F9", {"snes": dat_path}) is None
+
+
+def test_lookup_title_by_crc_unknown_crc(tmp_path: Path) -> None:
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(SAMPLE_CRC_DAT)
+
+    assert lookup_title_by_crc("snes", "DEADBEEF", {"snes": dat_path}) is None

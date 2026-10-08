@@ -11,6 +11,7 @@ but the bytes weren't checked.
 
 from __future__ import annotations
 
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,21 @@ def _gb_console(path: Path) -> str:
     return "gbc" if cgb_flag in (b"\x80", b"\xc0") else "gb"
 
 
+def _crc32_of(path: Path) -> str:
+    """Uppercase 8-hex-digit CRC32, matching the libretro-database DAT
+    files' own formatting (e.g. "F2EE11F9"), for cartridge-title lookup in
+    dat.lookup_title_by_crc. See ADR 0008.
+    """
+    crc = 0
+    try:
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                crc = zlib.crc32(chunk, crc)
+    except OSError:
+        return ""
+    return f"{crc & 0xFFFFFFFF:08X}"
+
+
 class RomExtractor(Extractor):
     name = "rom"
     priority = 10
@@ -88,35 +104,40 @@ class RomExtractor(Extractor):
 
     def extract(self, path: Path, evidence: Evidence) -> dict[str, Any]:
         ext = evidence.extension
+        crc32 = _crc32_of(path)
 
         if ext == ".nes":
-            return {"console": "nes", "verified": _read_at(path, 0, 4) == b"NES\x1a"}
+            verified = _read_at(path, 0, 4) == b"NES\x1a"
+            return {"console": "nes", "verified": verified, "crc32": crc32}
 
         if ext in (".gb", ".gbc"):
             logo_ok = _read_at(path, 0x104, 4) == b"\xce\xed\x66\x66"
             console = _gb_console(path) if logo_ok else ext.lstrip(".")
-            return {"console": console, "verified": logo_ok}
+            return {"console": console, "verified": logo_ok, "crc32": crc32}
 
         if ext == ".gba":
-            return {"console": "gba", "verified": _read_at(path, 0x04, 4) == b"\x24\xff\xae\x51"}
+            verified = _read_at(path, 0x04, 4) == b"\x24\xff\xae\x51"
+            return {"console": "gba", "verified": verified, "crc32": crc32}
 
         if ext in (".z64", ".n64", ".v64"):
-            return {"console": "n64", "verified": _read_at(path, 0, 4) in N64_MAGICS}
+            verified = _read_at(path, 0, 4) in N64_MAGICS
+            return {"console": "n64", "verified": verified, "crc32": crc32}
 
         if ext in (".md", ".gen"):
-            return {"console": "genesis", "verified": _read_at(path, 0x100, 4) == b"SEGA"}
+            verified = _read_at(path, 0x100, 4) == b"SEGA"
+            return {"console": "genesis", "verified": verified, "crc32": crc32}
 
         if ext in (".sfc", ".smc"):
-            return {"console": "snes", "verified": False}
+            return {"console": "snes", "verified": False, "crc32": crc32}
 
         if ext == ".nds":
-            return {"console": "nds", "verified": False}
+            return {"console": "nds", "verified": False, "crc32": crc32}
 
         if ext == ".dol":
             # Wii/GameCube homebrew executable (Dolphin Executable) -- no
             # fixed magic bytes to check, same extension-only situation as
             # SNES/NDS above. All homebrew .dol files seen so far are Wii
             # apps, so this assumes "wii" rather than "gc".
-            return {"console": "wii", "verified": False}
+            return {"console": "wii", "verified": False, "crc32": crc32}
 
-        return {"console": None, "verified": False}
+        return {"console": None, "verified": False, "crc32": crc32}

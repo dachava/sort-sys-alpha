@@ -124,6 +124,36 @@ def test_ps2_disc_with_dat_match_uses_canonical_title(tmp_path: Path) -> None:
     assert verdict.name_hint == ".Hack - Infection (USA)"
 
 
+def test_snes_rom_with_dat_match_uses_canonical_title(tmp_path: Path) -> None:
+    import zlib
+
+    data = b"\x00" * 100
+    crc_hex = f"{zlib.crc32(data) & 0xFFFFFFFF:08X}"
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(f'game (\n  comment "Test Game (USA)"\n  rom ( crc {crc_hex} )\n)\n')
+
+    path = tmp_path / "game.sfc"
+    path.write_bytes(data)
+
+    config = Config.model_validate({"roms": {"dat_files": {"snes": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/snes"
+    assert verdict.name_hint == "Test Game (USA)"
+
+
+def test_snes_rom_with_no_dat_match_has_no_name_hint(tmp_path: Path) -> None:
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text('game (\n  comment "Other Game"\n  rom ( crc DEADBEEF )\n)\n')
+
+    path = tmp_path / "game.sfc"
+    path.write_bytes(b"\x00" * 100)
+
+    config = Config.model_validate({"roms": {"dat_files": {"snes": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/snes"
+    assert verdict.name_hint is None
+
+
 def test_ps2_disc_with_no_dat_match_falls_back_to_volume_label(tmp_path: Path) -> None:
     from fixtures.make import make_iso9660
 

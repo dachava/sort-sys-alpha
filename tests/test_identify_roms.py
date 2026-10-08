@@ -1,15 +1,25 @@
+import zlib
 from pathlib import Path
 
 from sort_sys_alpha.identify import build_evidence
 
 
+def _crc32_hex(data: bytes) -> str:
+    return f"{zlib.crc32(data) & 0xFFFFFFFF:08X}"
+
+
 def test_nes_header(tmp_path: Path) -> None:
     path = tmp_path / "game.nes"
-    path.write_bytes(b"NES\x1a" + b"\x00" * 100)
+    data = b"NES\x1a" + b"\x00" * 100
+    path.write_bytes(data)
 
     evidence = build_evidence(path)
     assert evidence.kind == "rom"
-    assert evidence.details == {"console": "nes", "verified": True}
+    assert evidence.details == {
+        "console": "nes",
+        "verified": True,
+        "crc32": _crc32_hex(data),
+    }
 
 
 def test_gba_header(tmp_path: Path) -> None:
@@ -19,7 +29,11 @@ def test_gba_header(tmp_path: Path) -> None:
     path.write_bytes(bytes(data))
 
     evidence = build_evidence(path)
-    assert evidence.details == {"console": "gba", "verified": True}
+    assert evidence.details == {
+        "console": "gba",
+        "verified": True,
+        "crc32": _crc32_hex(bytes(data)),
+    }
 
 
 def test_n64_byte_order_variants(tmp_path: Path) -> None:
@@ -30,9 +44,14 @@ def test_n64_byte_order_variants(tmp_path: Path) -> None:
     ]
     for name, magic in variants:
         path = tmp_path / name
-        path.write_bytes(magic + b"\x00" * 100)
+        data = magic + b"\x00" * 100
+        path.write_bytes(data)
         evidence = build_evidence(path)
-        assert evidence.details == {"console": "n64", "verified": True}, name
+        assert evidence.details == {
+            "console": "n64",
+            "verified": True,
+            "crc32": _crc32_hex(data),
+        }, name
 
 
 def test_genesis_header(tmp_path: Path) -> None:
@@ -42,7 +61,11 @@ def test_genesis_header(tmp_path: Path) -> None:
     path.write_bytes(bytes(data))
 
     evidence = build_evidence(path)
-    assert evidence.details == {"console": "genesis", "verified": True}
+    assert evidence.details == {
+        "console": "genesis",
+        "verified": True,
+        "crc32": _crc32_hex(bytes(data)),
+    }
 
 
 def test_gb_vs_gbc_via_cgb_flag(tmp_path: Path) -> None:
@@ -70,18 +93,34 @@ def test_mislabeled_extension_is_unverified(tmp_path: Path) -> None:
 
 
 def test_snes_and_nds_are_extension_only(tmp_path: Path) -> None:
-    (tmp_path / "game.sfc").write_bytes(b"\x00" * 100)
-    (tmp_path / "game.nds").write_bytes(b"\x00" * 100)
+    data = b"\x00" * 100
+    (tmp_path / "game.sfc").write_bytes(data)
+    (tmp_path / "game.nds").write_bytes(data)
 
     sfc = build_evidence(tmp_path / "game.sfc")
     nds = build_evidence(tmp_path / "game.nds")
-    assert sfc.details == {"console": "snes", "verified": False}
-    assert nds.details == {"console": "nds", "verified": False}
+    crc32 = _crc32_hex(data)
+    assert sfc.details == {"console": "snes", "verified": False, "crc32": crc32}
+    assert nds.details == {"console": "nds", "verified": False, "crc32": crc32}
 
 
 def test_dol_is_extension_only_wii(tmp_path: Path) -> None:
     path = tmp_path / "homebrew.dol"
-    path.write_bytes(b"\x00" * 100)
+    data = b"\x00" * 100
+    path.write_bytes(data)
 
     evidence = build_evidence(path)
-    assert evidence.details == {"console": "wii", "verified": False}
+    assert evidence.details == {
+        "console": "wii",
+        "verified": False,
+        "crc32": _crc32_hex(data),
+    }
+
+
+def test_crc32_is_computed_from_full_file_contents(tmp_path: Path) -> None:
+    path = tmp_path / "game.nes"
+    data = b"NES\x1a" + bytes(range(256)) * 50
+    path.write_bytes(data)
+
+    evidence = build_evidence(path)
+    assert evidence.details["crc32"] == _crc32_hex(data)

@@ -1,14 +1,22 @@
-"""Local DAT-file matching for exact disc titles. See ADR 0007, PLAN.md M7.
+"""Local DAT-file matching for exact ROM/disc titles. See ADR 0007/0008,
+PLAN.md M7.
 
-Scoped to the libretro "Data Center" PS1/PS2/PSP DATs: ClrMamePro's
-paren-delimited text format (not Logiqx XML), keyed by *serial number*
-rather than a CRC/MD5/SHA1 content hash -- this format has no hash fields
-at all. A disc's serial is read from its `SYSTEM.CNF` boot line (already
-parsed for PS1-vs-PS2 detection in `identify/disk_images.py`) and looked up
-here for its canonical title.
+Both DAT shapes seen so far are ClrMamePro's paren-delimited text format
+(not Logiqx XML), but keyed differently:
 
-A future No-Intro/Redump hash-keyed DAT would need its own parser -- this
-module intentionally doesn't try to generalize to that shape yet.
+- PS1/PS2/PSP (libretro "Data Center" DATs): keyed by *serial number* --
+  this format has no hash fields at all. A disc's serial is read from its
+  `SYSTEM.CNF` boot line (already parsed for PS1-vs-PS2 detection in
+  `identify/disk_images.py`).
+- Cartridge consoles (NES/SNES/Genesis/GBA/... "libretro-database"
+  developer DATs): keyed by *CRC32 of the whole ROM file* -- no serial
+  field, title lives in `comment` instead of `name`. `identify/roms.py`
+  computes the CRC32 while reading the header anyway.
+
+A future No-Intro/Redump hash-keyed DAT for disc-dump *verification* (as
+opposed to cartridge title lookup) would still need its own handling --
+this module's CRC lookup only tells you a ROM's canonical title, not
+whether the dump is byte-for-byte a known-good copy.
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ from pathlib import Path
 
 _GAME_BLOCK_START_RE = re.compile(r"^game\s*\(", re.MULTILINE)
 _SERIAL_RE = re.compile(r"([A-Z]{4})[_-]?(\d{3})\.?(\d{2})")
+_CRC_RE = re.compile(r"\bcrc\s+([0-9A-Fa-f]{8})\b")
 
 
 def normalize_serial(raw: str) -> str | None:
@@ -88,3 +97,39 @@ def lookup_title(console: str, serial: str, dat_files: dict[str, Path]) -> str |
     if normalized is None:
         return None
     return _load_dat(path).get(normalized)
+
+
+def parse_crc_dat(text: str) -> dict[str, str]:
+    """CRC32 (uppercase hex) -> canonical title, for the cartridge-shaped
+    libretro DATs (NES/SNES/Genesis/GBA/...). These have no serial field at
+    all -- the title lives in `comment`, and the matching key is the ROM's
+    own CRC32 inside the nested `rom ( crc ... )` block. A game block with no
+    `comment` or no `crc` is skipped rather than guessed at.
+    """
+    titles: dict[str, str] = {}
+    for start in _GAME_BLOCK_START_RE.finditer(text):
+        open_paren = start.end() - 1
+        end = _matching_paren_end(text, open_paren)
+        block = text[open_paren + 1 : end - 1]
+        title = _field(block, "comment")
+        crc_match = _CRC_RE.search(block)
+        if not title or not crc_match:
+            continue
+        titles[crc_match.group(1).upper()] = title
+    return titles
+
+
+@cache
+def _load_crc_dat(path: Path) -> dict[str, str]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    return parse_crc_dat(text)
+
+
+def lookup_title_by_crc(console: str, crc32: str, dat_files: dict[str, Path]) -> str | None:
+    path = dat_files.get(console)
+    if path is None:
+        return None
+    return _load_crc_dat(path).get(crc32.upper())
