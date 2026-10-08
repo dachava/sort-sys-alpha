@@ -1,4 +1,3 @@
-from datetime import date
 from pathlib import Path
 
 from sort_sys_alpha.config import Config
@@ -113,8 +112,7 @@ def test_valid_move_produces_a_target_under_dest(tmp_path: Path) -> None:
     decision = gate_item(FileItem(path), evidence, verdict, config)
     assert isinstance(decision, MoveDecision)
     assert decision.target == config.dest / "Documents/Notes" / decision.name
-    assert decision.name.startswith(date.today().isoformat())
-    assert decision.name.endswith(".txt")
+    assert decision.name == "notes.txt"
 
 
 def test_exact_duplicate_of_already_filed_file_is_held(tmp_path: Path) -> None:
@@ -159,4 +157,4 @@ def test_folder_unit_target_has_no_extension(tmp_path: Path) -> None:
     decision = gate_item(unit, evidence, verdict, _config(tmp_path))
     assert isinstance(decision, MoveDecision)
     assert decision.target.suffix == ""
-    assert "myapp" in decision.name
+    assert decision.name == "MyApp"

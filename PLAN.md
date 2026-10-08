@@ -170,26 +170,27 @@ A file is **held** (stays where it is and gets logged with a reason) when any of
 - a naming template needs a field nobody could fill
 
 ### 4.7 Apply
-- Target: `<dest>\<Category>\<name from the category's naming template><ext>` (see §4.8). Until the conventions are defined,
-  the default template is `<YYYY-MM-DD>_<name>`, where the date is the move date.
+- Target: `<dest>\<Category>\<name from the category's naming template><ext>` (see §4.8). The default template is
+  `{title}` -- a human-readable name, not a date-prefixed slug (ADR 0010).
 - Never overwrite: collisions get a `-2`, `-3` suffix.
 - Move = same-volume rename. Cross-volume = copy, verify the hash, then remove the source (the only "delete" in the system, and it's part of a move).
 - Every move is written to `journal.jsonl` *before* it executes.
 
-### 4.8 Naming conventions (goal: every name standardized)
-Long-term, every filed file gets a name that follows a **per-category template**, filled from metadata. The model's job is
-to extract *fields*, not to write free-form names. Templates live in config:
+### 4.8 Naming conventions (ADR 0010)
+Every filed file gets a name that follows a **per-category template**, filled from metadata. The model's job is to
+extract *fields*, not to write free-form names. Templates live in config, and default to `{title}` for every category:
 
 ```toml
 [naming]
-default   = "{date}_{slug}"
-Images    = "{date}_{slug}"                     # placeholder
-Documents = "{date}_{slug}"                     # placeholder
-ROMs      = "{title} ({region})"                # placeholder; later No-Intro/Redump names from DAT matches
+default = "{title}"      # human-readable, sanitized for Windows, not lowercased/hyphenated
 ```
 
-Fields come from deterministic metadata first (EXIF date, PE version, DAT match) and from the model second. A field the
-template needs but nobody could fill → the file is held (it's not renamed with a gap). The actual conventions are an open decision (§11).
+`{title}` is the counterpart to the older `{slug}` (still available, just no longer the default): it takes the same
+source -- a DAT title, a PE `ProductName`, an LLM-proposed name, or the original filename -- and only strips
+Windows-illegal characters, leaving case/spacing/punctuation alone. `{date}` is also still available for anyone who
+wants a date-prefixed template back for a specific category. Fields come from deterministic metadata first (EXIF
+date, PE version, DAT match) and from the model second. A field the template needs but nobody could fill → the file
+is held (it's not renamed with a gap).
 
 ### 4.9 ROMs and disc images
 - Folders use **EmuDeck/RetroArch names** (`snes`, `nes`, `n64`, `gb`, `gbc`, `gba`, `nds`, `fds`, `gc`, `wii`, `psx`, `ps2`, `psp`,
@@ -351,7 +352,7 @@ sort-sys-alpha/
 | M5 | Feedback + `eval` | accuracy and latency for 2–3 models × Ollama vs Lemonade |
 | M6 | Vision (images, scanned PDFs), blog post | — |
 | M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs -- PS1/PS2/PSP serial matching done (ADR 0007) and cartridge CRC32 matching done (ADR 0008); arcade sets and byte-for-byte dump verification still open |
-| M8 | Naming conventions: per-category templates, field extraction, rename-only runs | every filed name matches its template |
+| M8 | Naming conventions: per-category templates, field extraction, rename-only runs | `{title}` default done (ADR 0010); per-category overrides, full field extraction, and rename-only runs still open |
 
 ## 11. Decisions
 
@@ -370,9 +371,12 @@ sort-sys-alpha/
 - **Subfolders:** sorted too, hybrid: coherent units move intact, grab-bags are split, unsure is held.
 - **Empty folders:** left in place by plan/apply/run and listed as suggested deletions; removed only by
   the separate, manual `prune` command (ADR 0006) -- hard rule 5's one deliberate, scoped exception.
+- **Naming default:** `{title}` (human-readable, sanitized, no date prefix) for every category, not a
+  date-prefixed slug (ADR 0010) -- `{slug}`/`{date}` stay available for a custom per-category override.
 
 **Still open**
-1. **Naming conventions:** the actual templates per category (needed by M8).
+1. **Per-category naming overrides:** whether any category wants something other than the new `{title}`
+   default (needed to finish M8).
 
 ## 12. Future modules (notes only)
 - **Music → FLAC library:** read a separate music downloads folder and move/sort into the FLAC library folder by tags

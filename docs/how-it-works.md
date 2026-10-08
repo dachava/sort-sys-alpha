@@ -319,7 +319,7 @@ never collides with a normal run's report.
 | M5 | Feedback loop + eval | done |
 | M6 | Vision (images, scanned PDFs) | explicitly deprioritized — routing is format-based, not content-based, so vision doesn't change any decision this tool makes |
 | M7 | ROM DAT matching | PS1/PS2/PSP serial matching and cartridge CRC32 matching both done; arcade sets and byte-for-byte dump verification against No-Intro/Redump remain open |
-| M8 | Per-category naming templates | still open |
+| M8 | Per-category naming templates | `{title}` (human-readable, no date prefix) is the default for every category now (ADR 0010); per-category overrides and full field extraction still open |
 
 Also still open, called out explicitly rather than silently assumed: dedup
 stays loose-file-only (a duplicate whole folder, or a duplicate hiding

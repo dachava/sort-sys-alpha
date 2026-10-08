@@ -266,24 +266,35 @@ succeeds rather than holding), and the two newest,
 the duplicate check is genuinely content-aware, not just size-aware).
 
 ### `naming.py`
-Deliberately minimal for now (PLAN.md's naming-template system is M8, not
-yet built): `build_name()` only ever fills `{date}`/`{slug}` into
-`config.naming.template_for(category)`, defaulting to `"{date}_{slug}"`.
+`build_name()` fills `{date}`/`{slug}`/`{title}` into
+`config.naming.template_for(category)`, defaulting to `"{title}"` (ADR
+0010) — every category gets a human-readable name by default now, not a
+date-prefixed slug. `source` for all three fields is `verdict.name_hint`
+when a tier provided one (a DAT title, a PE `ProductName`, an
+LLM-proposed name, …), falling back to the original filename's stem.
 `slugify()` lowercases, collapses every run of non-alphanumeric
 characters to a single hyphen, and strips leading/trailing hyphens — an
 all-symbol input becomes the literal string `"untitled"` rather than an
-empty slug. `source` for the slug is `verdict.name_hint` when a tier
-provided one (a DAT title, a PE `ProductName`, an LLM-proposed name, …),
-falling back to the original filename's stem. A template referencing a
-field this module doesn't fill (anything beyond `date`/`slug`) raises
-`NamingError`, which `gate.py` turns into a hold — "a naming template
-needs a field nobody could fill" is itself one of the documented hard-rule
-4 hold conditions, not a bug.
+empty slug; it's still available for a custom per-category template, just
+no longer what the default produces. `sanitize_filename()` is the
+human-readable counterpart: strips only Windows-illegal characters
+(`<>:"/\|?*`, control characters) and a trailing dot/space, leaving case,
+spacing, and punctuation alone — `.Hack - Infection (USA)` round-trips as
+itself, which is the entire point (an EmuDeck/scraper-ready ROM title
+surviving the naming step verbatim, not getting slugified into
+`hack-infection-usa`). A template referencing a field this module doesn't
+fill raises `NamingError`, which `gate.py` turns into a hold — "a naming
+template needs a field nobody could fill" is itself one of the documented
+hard-rule 4 hold conditions, not a bug.
 
-**Tests** (`test_naming.py`): `test_slugify_basic` (the collapsing/stripping
-rules), `test_default_template_uses_original_name_when_no_hint` /
-`test_name_hint_takes_precedence` (the fallback order), and
-`test_missing_template_field_raises_naming_error`.
+**Tests** (`test_naming.py`): `test_slugify_basic` (the collapsing/
+stripping rules), the `sanitize_filename` set (`test_sanitize_filename_
+strips_windows_illegal_characters`, `...keeps_casing_and_punctuation`,
+`...strips_trailing_dot_and_space`, `...empty_after_cleaning_is_untitled`),
+`test_default_template_uses_original_name_when_no_hint` /
+`test_name_hint_takes_precedence` (the fallback order, now asserting the
+human-readable `{title}` output), `test_rom_dat_title_is_used_verbatim_not_slugified`
+(the actual motivating case), and `test_missing_template_field_raises_naming_error`.
 
 ### `plan.py`
 Orchestrates one full `scan → identify → route → gate` pass into a

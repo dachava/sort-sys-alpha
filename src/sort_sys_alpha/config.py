@@ -116,7 +116,7 @@ class NamingConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    default: str = "{date}_{slug}"
+    default: str = "{title}"
 
     def template_for(self, category: str) -> str:
         return getattr(self, category, None) or (self.model_extra or {}).get(category, self.default)
