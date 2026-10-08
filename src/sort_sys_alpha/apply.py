@@ -62,6 +62,16 @@ def apply_plan(plan: Plan, config: Config) -> ApplyResult:
             held.append((move.move_root, "file changed between plan and apply"))
             continue
 
+        # A --source rescan of a folder already inside dest (e.g. dest's
+        # own Archives) can compute a target that's the item's own current
+        # path -- nothing actually needs to move. Without this check,
+        # unique_target() sees that path "already exists" (it's the item
+        # itself) and treats it as a name collision, pointlessly renaming
+        # the file to a "-2" sibling of itself.
+        if move.target.resolve() == move.move_root.resolve():
+            moved.append((move.move_root, move.move_root))
+            continue
+
         target = unique_target(move.target)
         append_entry(move.move_root, target, plan.run_id, config)
         try:

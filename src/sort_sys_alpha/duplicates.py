@@ -70,11 +70,21 @@ def find_duplicate_in_dest(path: Path, dest_dir: Path) -> Path | None:
     category folder hasn't been created) and is a cheap no-op, not an
     error. Only direct file children of `dest_dir` are considered -- the
     same flat-per-category layout every move already targets.
+
+    `path` itself is excluded from the candidates: when `--source`
+    re-triages a folder that already lives inside `dest` (e.g. rescanning
+    `dest/Archives`), `path` can legitimately already be sitting in the
+    exact directory being searched -- without this, a file would match
+    itself and get held as "an exact duplicate of itself."
     """
     if not dest_dir.is_dir():
         return None
     size = path.stat().st_size
-    candidates = [p for p in dest_dir.iterdir() if p.is_file() and p.stat().st_size == size]
+    candidates = [
+        p
+        for p in dest_dir.iterdir()
+        if p.is_file() and p != path and p.stat().st_size == size
+    ]
     if not candidates:
         return None
     digest = hash_file(path)

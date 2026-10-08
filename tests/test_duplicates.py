@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sort_sys_alpha.duplicates import partition_duplicates
+from sort_sys_alpha.duplicates import find_duplicate_in_dest, partition_duplicates
 from sort_sys_alpha.items import FileGroup, FileItem, FolderUnit
 
 
@@ -69,3 +69,46 @@ def test_single_file_is_not_a_duplicate_of_anything(tmp_path: Path) -> None:
 
     assert remaining == [FileItem(path)]
     assert holds == []
+
+
+def test_find_duplicate_in_dest_matches_a_real_sibling(tmp_path: Path) -> None:
+    dest_dir = tmp_path / "ROMs" / "genesis"
+    dest_dir.mkdir(parents=True)
+    existing = dest_dir / "game.md"
+    existing.write_bytes(b"same content")
+
+    candidate = tmp_path / "redownload.md"
+    candidate.write_bytes(b"same content")
+
+    assert find_duplicate_in_dest(candidate, dest_dir) == existing
+
+
+def test_find_duplicate_in_dest_excludes_the_candidate_itself(tmp_path: Path) -> None:
+    """A --source rescan of a folder already inside dest can pass a path
+    that's already sitting in the very directory being searched (ADR 0009
+    amendment) -- it must never match itself.
+    """
+    dest_dir = tmp_path / "Archives"
+    dest_dir.mkdir()
+    candidate = dest_dir / "mystery.zip"
+    candidate.write_bytes(b"unidentified content")
+
+    assert find_duplicate_in_dest(candidate, dest_dir) is None
+
+
+def test_find_duplicate_in_dest_no_match_returns_none(tmp_path: Path) -> None:
+    dest_dir = tmp_path / "Archives"
+    dest_dir.mkdir()
+    (dest_dir / "other.zip").write_bytes(b"different content")
+
+    candidate = tmp_path / "new.zip"
+    candidate.write_bytes(b"unique content")
+
+    assert find_duplicate_in_dest(candidate, dest_dir) is None
+
+
+def test_find_duplicate_in_dest_missing_dir_returns_none(tmp_path: Path) -> None:
+    candidate = tmp_path / "new.zip"
+    candidate.write_bytes(b"content")
+
+    assert find_duplicate_in_dest(candidate, tmp_path / "does-not-exist") is None

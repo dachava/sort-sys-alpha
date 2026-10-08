@@ -202,3 +202,29 @@ def test_apply_cross_volume_fallback_still_verifies_and_removes_source(
 
     assert len(result.moved) == 1
     assert not (config.source / "notes.txt").exists()
+
+
+def test_apply_is_a_noop_when_the_item_is_already_at_its_target(tmp_path: Path) -> None:
+    """A --source rescan of a folder already inside dest (e.g. dest's own
+    Archives) can compute a target that's the item's own current path.
+    Without a same-path check, movefs.unique_target() would see that path
+    "already exists" (it's the item itself) and rename it to a pointless
+    "-2" sibling of itself.
+    """
+    config = _config(tmp_path)
+    archives = config.dest / "Archives"
+    archives.mkdir(parents=True)
+    (archives / "mystery.zip").write_bytes(b"unidentified content")
+
+    # Rescan dest's own Archives folder, same as cli.py's --source override.
+    rescan_config = config.model_copy(update={"source": archives})
+    the_plan = build_plan(rescan_config)
+
+    assert len(the_plan.moves) == 1
+    result = apply_plan(the_plan, rescan_config)
+
+    assert result.moved == [(archives / "mystery.zip", archives / "mystery.zip")]
+    assert result.held == []
+    assert (archives / "mystery.zip").exists()
+    assert list(archives.iterdir()) == [archives / "mystery.zip"]  # no -2 sibling
+    assert read_entries(config) == []  # nothing to undo, nothing journaled
