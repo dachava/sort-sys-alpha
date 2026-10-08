@@ -230,10 +230,17 @@ def append_held_log(
             f.write(f"{timestamp} run={run_id} phase={phase} {item_path}: {reason}\n")
 
 
-def write_plan(plan: Plan, config: Config) -> tuple[Path, Path]:
+def write_plan(plan: Plan, config: Config, label: str | None = None) -> tuple[Path, Path]:
+    """`label` (typically the --source override's own folder name, see
+    cli.py) names the output files `plan-<label>.json`/`report-<label>.md`
+    instead of the default `plan.json`/`report.md`, so re-triaging a
+    different folder doesn't overwrite the normal run's report.
+    """
     state_dir = _state_dir(config)
-    plan_path = state_dir / PLAN_FILENAME
-    report_path = state_dir / REPORT_FILENAME
+    plan_name = f"plan-{label}.json" if label else PLAN_FILENAME
+    report_name = f"report-{label}.md" if label else REPORT_FILENAME
+    plan_path = state_dir / plan_name
+    report_path = state_dir / report_name
     plan_path.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
     report_path.write_text(render_report(plan), encoding="utf-8")
     append_held_log(

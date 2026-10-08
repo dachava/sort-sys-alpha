@@ -96,7 +96,7 @@ def plan(
     config = _apply_source_override(load_config(config_path), source)
     start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
-    plan_path, report_path = write_plan(the_plan, config)
+    plan_path, report_path = write_plan(the_plan, config, label=source.name if source else None)
     elapsed = time.monotonic() - start
     typer.echo(f"{len(the_plan.moves)} to move, {len(the_plan.holds)} held.")
     typer.echo(f"plan: {plan_path}")
@@ -132,7 +132,7 @@ def run(
     config = _apply_source_override(load_config(config_path), source)
     start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
-    plan_path, report_path = write_plan(the_plan, config)
+    plan_path, report_path = write_plan(the_plan, config, label=source.name if source else None)
 
     if config.schedule.mode == "plan":
         typer.echo(f"{len(the_plan.moves)} ready to review.")

@@ -113,8 +113,13 @@ def test_plan_source_override(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "1 to move" in result.output
     # the override only affects this run, it's not a config.toml edit --
-    # the override's own dest (source/_Filed) still gets the report.
-    assert (source / "_Filed" / ".sort-sys-alpha" / "report.md").exists()
+    # dest stays as configured (source/_Filed), and the override's own
+    # folder name labels the output so it doesn't clobber report.md from
+    # a normal run.
+    state_dir = source / "_Filed" / ".sort-sys-alpha"
+    assert (state_dir / "report-Archives.md").exists()
+    assert (state_dir / "plan-Archives.json").exists()
+    assert not (state_dir / "report.md").exists()
     assert (other / "stuff.zip").exists()  # plan never touches source
 
 

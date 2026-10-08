@@ -229,7 +229,9 @@ sort-sys-alpha prune               # remove empty folders under source, recursiv
 
 `--source` overrides `config.toml`'s `source` for one run without editing the file -- e.g. re-triaging
 `dest\Archives` after a detection improvement: `plan --source dest\Archives` (dest stays as configured,
-so re-identified items land in their real category instead of back in Archives).
+so re-identified items land in their real category instead of back in Archives). The override's own
+folder name labels the output (`report-Archives.md`/`plan-Archives.json`) instead of the usual
+`report.md`/`plan.json`, so a rescan never clobbers a normal run's report.
 
 ## 6. Feedback loop ("it learns")
 No fine-tuning. Learning comes from data:
