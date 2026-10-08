@@ -217,6 +217,30 @@ def test_7z_of_single_console_roms_routes_to_console_folder(tmp_path: Path) -> N
     assert verdict.category == "ROMs/genesis"
 
 
+def test_msx_zip_with_name_hint_routes_to_console_folder(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "Some Game (MSX).zip"
+    make_zip(path, {"game.rom": b"\x00" * 10, "readme.txt": b"hi"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/msx"
+
+
+def test_rom_extension_zip_without_msx_name_hint_stays_archive(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "firmware-dump.zip"
+    make_zip(path, {"firmware.rom": b"\x00" * 10})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
+def test_loose_rom_extension_file_is_not_routed(tmp_path: Path) -> None:
+    path = tmp_path / "Some Game (MSX).rom"
+    path.write_bytes(b"\x00" * 100)
+    assert route(build_evidence(path), Config()) is None
+
+
 def test_zip_of_mixed_consoles_stays_archive(tmp_path: Path) -> None:
     from fixtures.make import make_zip
 

@@ -16,7 +16,7 @@ from .config import Config, Rule
 from .dat import lookup_title, lookup_title_by_crc
 from .identify.archives import console_from_zip_members
 from .identify.audio_video import AUDIO_EXTENSIONS
-from .identify.roms import single_console_from_members
+from .identify.roms import msx_console_from_archive, single_console_from_members
 from .identify.types import Evidence
 from .items import FileGroup, FolderUnit, ScanItem
 from .llm.backend import LlmError, backend_for
@@ -111,6 +111,9 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
         if console is None:
             console = console_from_zip_members(evidence.path, members)
             reason = f"archive containing a {console} disc image" if console else None
+        if console is None:
+            console = msx_console_from_archive(evidence.path, members)
+            reason = f"archive of {console} ROMs (members + archive name)" if console else None
         if console:
             folder = f"ROMs/{console}"
             if folder in allowlist:

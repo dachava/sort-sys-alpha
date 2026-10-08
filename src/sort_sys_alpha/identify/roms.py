@@ -11,6 +11,7 @@ but the bytes weren't checked.
 
 from __future__ import annotations
 
+import re
 import zlib
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,25 @@ def single_console_from_members(members: list[str]) -> str | None:
         if not name.endswith("/") and Path(name).suffix.lower() in ZIPPED_ROM_EXTENSION_CONSOLE
     }
     return consoles.pop() if len(consoles) == 1 else None
+
+
+# MSX cartridge dumps use the generic ".rom" extension -- unlike every
+# extension in ZIPPED_ROM_EXTENSION_CONSOLE above, that alone doesn't imply
+# MSX (lots of unrelated things are named *.rom). This only fires when the
+# archive's own filename corroborates it, never for a loose .rom file.
+_MSX_NAME_HINT_RE = re.compile(r"\bmsx\b", re.IGNORECASE)
+
+
+def msx_console_from_archive(archive_path: Path, members: list[str]) -> str | None:
+    """"MSX" in the archive's own filename, plus at least one ".rom" member,
+    is treated as MSX. Either signal alone is too weak on its own.
+    """
+    if not _MSX_NAME_HINT_RE.search(archive_path.stem):
+        return None
+    has_rom_member = any(
+        not name.endswith("/") and Path(name).suffix.lower() == ".rom" for name in members
+    )
+    return "msx" if has_rom_member else None
 
 
 def _read_at(path: Path, offset: int, length: int) -> bytes:
