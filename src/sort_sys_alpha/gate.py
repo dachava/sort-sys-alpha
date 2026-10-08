@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
+from .duplicates import find_duplicate_in_dest
 from .identify.types import Evidence
-from .items import FolderUnit, ScanItem
+from .items import FileItem, FolderUnit, ScanItem
 from .naming import NamingError, build_name
 from .route import RouteVerdict
 
@@ -107,6 +108,14 @@ def gate_item(
         target.resolve().relative_to(config.dest.resolve())
     except ValueError:
         return HoldDecision(item, evidence, "target path would escape the destination root")
+
+    # A re-download of something already correctly filed shouldn't become a
+    # redundant "-2" sibling (movefs.unique_target() has no concept of
+    # content equality, only name collision) -- see ADR 0009.
+    if isinstance(item, FileItem):
+        duplicate = find_duplicate_in_dest(item.path, target.parent)
+        if duplicate is not None:
+            return HoldDecision(item, evidence, f"exact duplicate of {duplicate}, left in place")
 
     return MoveDecision(
         item,

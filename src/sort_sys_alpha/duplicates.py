@@ -1,11 +1,22 @@
-"""Exact-content duplicate detection for loose files. See ADR 0005.
+"""Exact-content duplicate detection, loose files only. See ADR 0005/0009.
 
-Scoped deliberately narrow: only plain `FileItem`s are considered (a file
-already swallowed into a `FileGroup` or `FolderUnit` is left alone), and
-only byte-identical content counts -- no archive-content or folder-tree
-comparison. Size is free (already stat'd by `scan()`), so it narrows the
-candidate set before anything gets hashed: only files that already share an
-exact size with a sibling are ever read.
+Two related checks, both scoped deliberately narrow to plain `FileItem`s (a
+file already swallowed into a `FileGroup` or `FolderUnit` is left alone),
+and both only about byte-identical content -- no archive-content or
+folder-tree comparison:
+
+- `partition_duplicates` -- within one scan batch (ADR 0005): two files
+  freshly found in `source` with the same content.
+- `find_duplicate_in_dest` -- against what's already filed (ADR 0009): a
+  single candidate against the files already sitting in its computed
+  destination folder, so a re-download of something already correctly
+  filed doesn't become a redundant `-2` copy.
+
+Both lean on the same cost-bounding trick: size is free (already stat'd by
+`scan()`, or by a plain `Path.stat()` for the destination side), so it
+narrows the candidate set before anything gets hashed -- a real SHA-256
+(`movefs.hash_file()`) only runs for files that already share a size with
+at least one candidate.
 """
 
 from __future__ import annotations
@@ -51,3 +62,20 @@ def partition_duplicates(
         for path, kept in duplicate_of.items()
     ]
     return remaining, holds
+
+
+def find_duplicate_in_dest(path: Path, dest_dir: Path) -> Path | None:
+    """A file already in `dest_dir` with content byte-identical to `path`,
+    if any (ADR 0009). `dest_dir` not existing yet is the common case (the
+    category folder hasn't been created) and is a cheap no-op, not an
+    error. Only direct file children of `dest_dir` are considered -- the
+    same flat-per-category layout every move already targets.
+    """
+    if not dest_dir.is_dir():
+        return None
+    size = path.stat().st_size
+    candidates = [p for p in dest_dir.iterdir() if p.is_file() and p.stat().st_size == size]
+    if not candidates:
+        return None
+    digest = hash_file(path)
+    return next((c for c in candidates if hash_file(c) == digest), None)

@@ -117,6 +117,37 @@ def test_valid_move_produces_a_target_under_dest(tmp_path: Path) -> None:
     assert decision.name.endswith(".txt")
 
 
+def test_exact_duplicate_of_already_filed_file_is_held(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    existing = config.dest / "Documents/Notes" / "2026-01-01_old-copy.txt"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("same content")
+
+    path = tmp_path / "notes.txt"
+    path.write_text("same content")
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("Documents/Notes", 1.0, "note")
+
+    decision = gate_item(FileItem(path), evidence, verdict, config)
+    assert isinstance(decision, HoldDecision)
+    assert decision.reason == f"exact duplicate of {existing}, left in place"
+
+
+def test_same_size_but_different_content_is_not_held_as_duplicate(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    existing = config.dest / "Documents/Notes" / "2026-01-01_other.txt"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("content A")
+
+    path = tmp_path / "notes.txt"
+    path.write_text("content B")  # same length, different bytes
+    evidence = build_evidence(path)
+    verdict = RouteVerdict("Documents/Notes", 1.0, "note")
+
+    decision = gate_item(FileItem(path), evidence, verdict, config)
+    assert isinstance(decision, MoveDecision)
+
+
 def test_folder_unit_target_has_no_extension(tmp_path: Path) -> None:
     root = tmp_path / "MyApp"
     root.mkdir()

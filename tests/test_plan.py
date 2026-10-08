@@ -97,6 +97,40 @@ def test_build_plan_records_a_held_llm_verdict_in_routing_log(
     assert entries[0].outcome == "held"
 
 
+def test_build_plan_holds_an_llm_routed_duplicate_of_an_already_filed_file(
+    tmp_path: Path, fake_llm_server
+) -> None:
+    config = _config(
+        tmp_path,
+        model={"backend": "ollama", "ollama": {"base_url": fake_llm_server.base_url}},
+    )
+    existing = config.dest / "Documents" / "2026-01-01_already-filed.xyz123"
+    existing.parent.mkdir(parents=True)
+    existing.write_bytes(b"\x01\x02\x03")
+
+    (config.source / "mystery.xyz123").write_bytes(b"\x01\x02\x03")  # same content, redownloaded
+    fake_llm_server.set_ollama_reply(
+        json.dumps(
+            {
+                "kind": "router manual",
+                "category": "Documents",
+                "name": "a-mystery-file",
+                "confidence": 0.9,
+                "reason": "looks like a document",
+            }
+        )
+    )
+
+    the_plan = build_plan(config)
+    assert the_plan.moves == []
+    assert len(the_plan.holds) == 1
+    assert f"exact duplicate of {existing}" in the_plan.holds[0].reason
+
+    entries = read_routing_entries(config)
+    assert len(entries) == 1
+    assert entries[0].outcome == "held"
+
+
 def test_build_plan_reports_progress_per_item(tmp_path: Path) -> None:
     config = _config(tmp_path)
     (config.source / "notes.txt").write_text("hi")

@@ -17,8 +17,10 @@ stays focused on Downloads.
 Non-goals for v1: other folders, sync, a GUI. (De-duplication was originally
 out of scope too, but exact-content duplicate detection for loose files was
 added after real usage showed the same readme/license/installer repeated
-dozens of times across unrelated downloads -- see ADR 0005. Folder-level and
-archive-content dedup remain out of scope.)
+dozens of times across unrelated downloads -- see ADR 0005. The same check
+was extended to cover a loose file matching something already filed from an
+earlier run, not just within one scan batch -- see ADR 0009. Folder-level
+and archive-content dedup remain out of scope.)
 
 ## 2. Principles (from the article, kept as hard rules)
 
