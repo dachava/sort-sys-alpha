@@ -217,15 +217,19 @@ template needs but nobody could fill → the file is held (it's not renamed with
 ## 5. CLI
 
 ```
-sort-sys-alpha scan                # inventory + evidence only, no model (great for debugging extractors)
-sort-sys-alpha plan                # produce plan.json + report.md
+sort-sys-alpha scan [--source DIR] # inventory + evidence only, no model (great for debugging extractors)
+sort-sys-alpha plan [--source DIR] # produce plan.json + report.md
 sort-sys-alpha apply [--plan FILE] # execute a plan
-sort-sys-alpha run                 # plan + apply with gates (what the scheduler calls)
+sort-sys-alpha run [--source DIR]  # plan + apply with gates (what the scheduler calls)
 sort-sys-alpha undo [RUN_ID|last]
 sort-sys-alpha eval                # run the labeled fixture set, print accuracy per category
 sort-sys-alpha doctor              # check model server, config, permissions
 sort-sys-alpha prune               # remove empty folders under source, recursively (ADR 0006)
 ```
+
+`--source` overrides `config.toml`'s `source` for one run without editing the file -- e.g. re-triaging
+`dest\Archives` after a detection improvement: `plan --source dest\Archives` (dest stays as configured,
+so re-identified items land in their real category instead of back in Archives).
 
 ## 6. Feedback loop ("it learns")
 No fine-tuning. Learning comes from data:

@@ -100,6 +100,24 @@ def test_scan_reports_a_file(tmp_path: Path) -> None:
     assert "notes.txt" in result.output
 
 
+def test_plan_source_override(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    (source / "notes.txt").write_text("hello\n")
+    other = tmp_path / "Archives"
+    other.mkdir()
+    (other / "stuff.zip").write_bytes(b"")
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(app, ["plan", "--config", str(config_path), "--source", str(other)])
+    assert result.exit_code == 0
+    assert "1 to move" in result.output
+    # the override only affects this run, it's not a config.toml edit --
+    # the override's own dest (source/_Filed) still gets the report.
+    assert (source / "_Filed" / ".sort-sys-alpha" / "report.md").exists()
+    assert (other / "stuff.zip").exists()  # plan never touches source
+
+
 def test_plan_writes_plan_and_report(tmp_path: Path) -> None:
     source = tmp_path / "Downloads"
     source.mkdir()

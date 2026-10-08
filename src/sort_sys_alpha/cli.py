@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 
 from .apply import apply_plan
-from .config import load_config
+from .config import Config, load_config
 from .evaluate import render_report as render_eval_report
 from .evaluate import run_eval
 from .identify import identify_item
@@ -58,12 +58,25 @@ def _format_duration(seconds: float) -> str:
     return f"{secs}s"
 
 
+SOURCE_OVERRIDE_HELP = (
+    "Override config.toml's source for this run only "
+    "(e.g. to re-triage an already-filed folder)."
+)
+
+
+def _apply_source_override(config: Config, source: Path | None) -> Config:
+    if source is None:
+        return config
+    return config.model_copy(update={"source": source.expanduser()})
+
+
 @app.command()
 def scan(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    source: Path | None = typer.Option(None, "--source", help=SOURCE_OVERRIDE_HELP),
 ) -> None:
     """Inventory + evidence only, no model (great for debugging extractors)."""
-    config = load_config(config_path)
+    config = _apply_source_override(load_config(config_path), source)
     result = run_scan(config)
 
     for item in result.items:
@@ -77,9 +90,10 @@ def scan(
 @app.command()
 def plan(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    source: Path | None = typer.Option(None, "--source", help=SOURCE_OVERRIDE_HELP),
 ) -> None:
     """Produce plan.json + report.md."""
-    config = load_config(config_path)
+    config = _apply_source_override(load_config(config_path), source)
     start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
@@ -112,9 +126,10 @@ def apply(
 @app.command()
 def run(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    source: Path | None = typer.Option(None, "--source", help=SOURCE_OVERRIDE_HELP),
 ) -> None:
     """Plan + apply with gates. `schedule.mode` picks auto vs. plan-only for the scheduled task."""
-    config = load_config(config_path)
+    config = _apply_source_override(load_config(config_path), source)
     start = time.monotonic()
     the_plan = build_plan(config, on_item=_progress, on_resolved=_resolved)
     plan_path, report_path = write_plan(the_plan, config)
