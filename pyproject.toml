@@ -16,6 +16,7 @@ dependencies = [
     "openpyxl>=3.1",
     "python-pptx>=1.0",
     "mutagen>=1.47",
+    "py7zr>=0.22",
 ]
 
 [project.scripts]

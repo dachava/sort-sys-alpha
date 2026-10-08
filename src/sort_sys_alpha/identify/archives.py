@@ -1,11 +1,21 @@
-"""Archive member listing, via stdlib `zipfile`/`tarfile`. Never extracts.
-See PLAN.md section 4.3.
+"""Archive member listing, via stdlib `zipfile`/`tarfile` plus `py7zr` for
+`.7z`. Never extracts to disk. See PLAN.md section 4.3.
 
-`.rar` and `.7z` can't get a member listing (no stdlib support, and
-py7zr/rarfile are extra dependencies this milestone doesn't need), but
-they're still routed deterministically (PLAN.md rule 1: rules before the
-model) since classifying "this is an archive" by extension needs no library
-at all — `extract()` just returns no member details for either.
+`.rar` still can't get a member listing (no stdlib support, and rarfile is
+an extra dependency this milestone doesn't need), so it's still routed
+deterministically by extension alone (PLAN.md rule 1: rules before the
+model), same as every archive type before a listing is read.
+
+`.7z` disc-in-archive detection (the zip-member equivalent in
+`console_from_zip_members` below) is deliberately NOT implemented: py7zr has
+no cheap partial-read of a single member the way `zipfile.ZipFile.open()`
+does -- extracting even the first few KB of a solid-compressed 7z member
+means decompressing that whole member into memory first. For a multi-GB
+disc dump, that's a real cost this identification step shouldn't pay. A 7z
+containing a disc image still gets a member listing, but no console
+detection from the disc's own header -- it falls through to `Archives`
+unless `single_console_from_members` already matched on cartridge
+extensions alone.
 """
 
 from __future__ import annotations
@@ -14,6 +24,8 @@ import tarfile
 import zipfile
 from pathlib import Path
 from typing import Any
+
+import py7zr
 
 from .base import Extractor
 from .disk_images import DISC_EXTENSIONS_IN_ARCHIVE, console_from_disc_stream
@@ -25,7 +37,7 @@ ZIP_EXTENSIONS = {".zip"}
 TAR_EXTENSIONS = {".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz"}
 RAR_EXTENSIONS = {".rar"}
 SEVENZ_EXTENSIONS = {".7z"}
-NO_LISTING_EXTENSIONS = RAR_EXTENSIONS | SEVENZ_EXTENSIONS
+NO_LISTING_EXTENSIONS = RAR_EXTENSIONS
 
 
 class ArchiveExtractor(Extractor):
@@ -35,6 +47,7 @@ class ArchiveExtractor(Extractor):
     def can_handle(self, evidence: Evidence) -> bool:
         return (
             evidence.extension in ZIP_EXTENSIONS
+            or evidence.extension in SEVENZ_EXTENSIONS
             or evidence.extension in NO_LISTING_EXTENSIONS
             or any(evidence.original_name.lower().endswith(suffix) for suffix in TAR_EXTENSIONS)
         )
@@ -42,6 +55,8 @@ class ArchiveExtractor(Extractor):
     def extract(self, path: Path, evidence: Evidence) -> dict[str, Any]:
         if evidence.extension in ZIP_EXTENSIONS:
             return self._zip(path)
+        if evidence.extension in SEVENZ_EXTENSIONS:
+            return self._sevenz(path)
         if evidence.extension in NO_LISTING_EXTENSIONS:
             return {}
         return self._tar(path)
@@ -53,6 +68,21 @@ class ArchiveExtractor(Extractor):
                 names = [i.filename for i in infos[:MAX_MEMBERS]]
                 total_size = sum(i.file_size for i in infos)
         except (zipfile.BadZipFile, OSError):
+            return {}
+        return {"member_count": len(infos), "members": names, "uncompressed_size": total_size}
+
+    def _sevenz(self, path: Path) -> dict[str, Any]:
+        try:
+            with py7zr.SevenZipFile(path, mode="r") as archive:
+                infos = [i for i in archive.list() if not i.is_directory]
+                names = [i.filename for i in infos[:MAX_MEMBERS]]
+                total_size = sum(i.uncompressed for i in infos)
+        except Exception:
+            # py7zr doesn't guarantee a narrow exception type for malformed
+            # input the way zipfile.BadZipFile does -- a corrupt/fake 7z can
+            # raise anything from its header parser (struct.error,
+            # lzma.LZMAError, ...). Same contract as _zip/_tar: anything
+            # unparseable just yields no member details, never a crash.
             return {}
         return {"member_count": len(infos), "members": names, "uncompressed_size": total_size}
 

@@ -14,6 +14,8 @@ import wave
 import zipfile
 from pathlib import Path
 
+import py7zr
+
 SECTOR = 2048
 
 
@@ -21,6 +23,12 @@ def make_zip(path: Path, members: dict[str, bytes]) -> None:
     with zipfile.ZipFile(path, "w") as zf:
         for name, data in members.items():
             zf.writestr(name, data)
+
+
+def make_7z(path: Path, members: dict[str, bytes]) -> None:
+    with py7zr.SevenZipFile(path, "w") as zf:
+        for name, data in members.items():
+            zf.writestr(data, name)
 
 
 def make_tar_gz(path: Path, members: dict[str, bytes]) -> None:

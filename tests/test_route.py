@@ -195,6 +195,15 @@ def test_zip_ignores_incidental_non_rom_members(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/snes"
 
 
+def test_7z_of_single_console_roms_routes_to_console_folder(tmp_path: Path) -> None:
+    from fixtures.make import make_7z
+
+    path = tmp_path / "offroad.7z"
+    make_7z(path, {"Test Drive Off-Road 2 (USA).md": b"\x00" * 10, "readme.txt": b"hi"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/genesis"
+
+
 def test_zip_of_mixed_consoles_stays_archive(tmp_path: Path) -> None:
     from fixtures.make import make_zip
 
