@@ -208,11 +208,31 @@ def test_zip_ignores_incidental_non_rom_members(tmp_path: Path) -> None:
     assert verdict.category == "ROMs/snes"
 
 
+def test_zip_with_only_readme_md_stays_archive(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    path = tmp_path / "some-tool-main.zip"
+    make_zip(path, {"README.md": b"# some-tool\n\nJust a utility, not a ROM.\n"})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "Archives"
+
+
+def test_zip_with_header_verified_genesis_md_routes_to_console(tmp_path: Path) -> None:
+    from fixtures.make import make_zip
+
+    rom = bytearray(0x200)
+    rom[0x100:0x104] = b"SEGA"
+    path = tmp_path / "game.zip"
+    make_zip(path, {"game.md": bytes(rom)})
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/genesis"
+
+
 def test_7z_of_single_console_roms_routes_to_console_folder(tmp_path: Path) -> None:
     from fixtures.make import make_7z
 
     path = tmp_path / "offroad.7z"
-    make_7z(path, {"Test Drive Off-Road 2 (USA).md": b"\x00" * 10, "readme.txt": b"hi"})
+    make_7z(path, {"Test Drive Off-Road 2 (USA).gen": b"\x00" * 10, "readme.txt": b"hi"})
     verdict = route(build_evidence(path), Config())
     assert verdict.category == "ROMs/genesis"
 

@@ -12,9 +12,13 @@ but the bytes weren't checked.
 from __future__ import annotations
 
 import re
+import zipfile
 import zlib
 from pathlib import Path
 from typing import Any
+
+import py7zr
+from py7zr.io import BytesIOFactory
 
 from .base import Extractor
 from .types import Evidence
@@ -29,6 +33,9 @@ N64_MAGICS = {
     b"\x37\x80\x40\x12",  # .v64, byte-swapped 16-bit words
     b"\x40\x12\x37\x80",  # .n64, byte-swapped 32-bit words
 }
+
+GENESIS_HEADER_OFFSET = 0x100
+GENESIS_MAGIC = b"SEGA"
 
 # fwNES-headered dumps start with this 4-byte magic; headerless dumps (more
 # common from modern dumping tools) start directly with the disk's own
@@ -58,20 +65,72 @@ ZIPPED_ROM_EXTENSION_CONSOLE = {
     ".fds": "fds",
 }
 
+# ".md" is the one entry above that *isn't* unambiguous -- it's Markdown
+# everywhere outside a ROM set, and a GitHub "Download ZIP" export almost
+# always has a README.md. A console implied only by this kind of member
+# needs its own header checked (see _verifies_ambiguous_member) before it's
+# trusted; every other extension stays pure extension-only.
+AMBIGUOUS_ZIPPED_EXTENSIONS = {".md"}
 
-def single_console_from_members(members: list[str]) -> str | None:
+
+def _member_header(path: Path, name: str, offset: int, length: int) -> bytes:
+    """First `length` bytes at `offset` inside one archive member (zip or
+    7z), no extraction to disk. Empty on any failure -- bad archive, missing
+    member, or anything else -- never raises. 7z has no cheap partial read
+    (see identify/archives.py's module docstring), but that cost only
+    matters for multi-GB disc dumps; a doc file or cartridge ROM is small
+    enough that decompressing the whole member is still cheap.
+    """
+    try:
+        if path.suffix.lower() == ".7z":
+            with py7zr.SevenZipFile(path, mode="r") as archive:
+                factory = BytesIOFactory(64 * 1024 * 1024)
+                archive.extract(targets=[name], factory=factory)
+                data = factory.products.get(name)
+            if data is None:
+                return b""
+            data.seek(offset)
+            return data.read(length)
+        with zipfile.ZipFile(path) as zf, zf.open(name) as f:
+            f.seek(offset)
+            return f.read(length)
+    except Exception:
+        return b""
+
+
+def single_console_from_members(path: Path, members: list[str]) -> str | None:
     """If every ROM-extension member in an archive's listing belongs to one
     console, return it. Returns None when no member has a recognized ROM
     extension, or when members span more than one console. Non-ROM members
     (readme, scan, cover art) are ignored rather than disqualifying the
     match -- those routinely ride along in ROM-set zips.
+
+    When every matching member is an ambiguous extension (AMBIGUOUS_ZIPPED_
+    EXTENSIONS), at least one of them has to actually verify against that
+    console's header -- otherwise a zip with nothing ROM-like but a
+    README.md would misroute as a Genesis ROM set.
     """
-    consoles = {
-        ZIPPED_ROM_EXTENSION_CONSOLE[Path(name).suffix.lower()]
+    matched = [
+        (name, ZIPPED_ROM_EXTENSION_CONSOLE[Path(name).suffix.lower()])
         for name in members
         if not name.endswith("/") and Path(name).suffix.lower() in ZIPPED_ROM_EXTENSION_CONSOLE
-    }
-    return consoles.pop() if len(consoles) == 1 else None
+    ]
+    consoles = {console for _, console in matched}
+    if len(consoles) != 1:
+        return None
+    console = consoles.pop()
+
+    all_ambiguous = all(
+        Path(name).suffix.lower() in AMBIGUOUS_ZIPPED_EXTENSIONS for name, _ in matched
+    )
+    if not all_ambiguous:
+        return console
+
+    verified = any(
+        _member_header(path, name, GENESIS_HEADER_OFFSET, len(GENESIS_MAGIC)) == GENESIS_MAGIC
+        for name, _ in matched
+    )
+    return console if verified else None
 
 
 # MSX cartridge dumps use the generic ".rom" extension -- unlike every
@@ -156,7 +215,7 @@ class RomExtractor(Extractor):
             return {"console": "n64", "verified": verified, "crc32": crc32}
 
         if ext in (".md", ".gen"):
-            verified = _read_at(path, 0x100, 4) == b"SEGA"
+            verified = _read_at(path, GENESIS_HEADER_OFFSET, len(GENESIS_MAGIC)) == GENESIS_MAGIC
             return {"console": "genesis", "verified": verified, "crc32": crc32}
 
         if ext in (".sfc", ".smc"):

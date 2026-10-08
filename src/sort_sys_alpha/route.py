@@ -106,7 +106,7 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
 
     if kind == "archive":
         members = details.get("members", [])
-        console = single_console_from_members(members)
+        console = single_console_from_members(evidence.path, members)
         reason = f"archive of {console} ROMs (members, extension-only)" if console else None
         if console is None:
             console = console_from_zip_members(evidence.path, members)
