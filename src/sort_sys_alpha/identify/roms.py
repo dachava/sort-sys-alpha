@@ -151,6 +151,48 @@ def single_console_from_members(path: Path, members: list[str]) -> str | None:
     return console if verified else None
 
 
+def single_rom_member(members: list[str]) -> str | None:
+    """The one archive member with a recognized cartridge extension, if
+    there's exactly one such member in the whole listing. Stricter than
+    `single_console_from_members` (which allows several same-console
+    members -- a legitimate multi-game zip): DAT-matching a CRC32 only
+    means something when there's exactly one file to hash and exactly one
+    title to name the whole archive after.
+    """
+    matched = [
+        name
+        for name in members
+        if not name.endswith("/") and Path(name).suffix.lower() in ZIPPED_ROM_EXTENSION_CONSOLE
+    ]
+    return matched[0] if len(matched) == 1 else None
+
+
+def member_crc32(path: Path, name: str) -> str:
+    """Uppercase 8-hex-digit CRC32 of one archive member's full
+    decompressed content (zip or 7z), no extraction to disk -- the
+    archive-member counterpart to `_crc32_of` for a loose file. Empty
+    string on any failure, same contract as `_member_header`.
+    """
+    crc = 0
+    try:
+        if path.suffix.lower() == ".7z":
+            with py7zr.SevenZipFile(path, mode="r") as archive:
+                factory = BytesIOFactory(64 * 1024 * 1024)
+                archive.extract(targets=[name], factory=factory)
+                data = factory.products.get(name)
+            if data is None:
+                return ""
+            for chunk in iter(lambda: data.read(1 << 20), b""):
+                crc = zlib.crc32(chunk, crc)
+        else:
+            with zipfile.ZipFile(path) as zf, zf.open(name) as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    crc = zlib.crc32(chunk, crc)
+    except Exception:
+        return ""
+    return f"{crc & 0xFFFFFFFF:08X}"
+
+
 # MSX cartridge dumps use the generic ".rom" extension -- unlike every
 # extension in ZIPPED_ROM_EXTENSION_CONSOLE above, that alone doesn't imply
 # MSX (lots of unrelated things are named *.rom). This only fires when the

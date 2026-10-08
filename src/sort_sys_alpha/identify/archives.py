@@ -97,13 +97,20 @@ class ArchiveExtractor(Extractor):
         return {"member_count": len(members), "members": names, "uncompressed_size": total_size}
 
 
-def console_from_zip_members(path: Path, members: list[str]) -> str | None:
+def console_from_zip_members(path: Path, members: list[str]) -> tuple[str | None, str | None]:
     """If a zip contains a disc image (loose `.iso`/`.img`/`.gcm`, or a raw
-    `.bin` dump) identifiable as a single console, return it. Reads each
-    disc-extension member's stream directly (no extraction to disk); a zip
-    with no disc-extension members, or one that isn't a real zip at all
-    (`.tar.gz`, say), is a cheap no-op. Members from more than one console
-    are treated as ambiguous, same as `single_console_from_members` above.
+    `.bin` dump) identifiable as a single console, return `(console,
+    serial)`. Reads each disc-extension member's stream directly (no
+    extraction to disk); a zip with no disc-extension members, or one that
+    isn't a real zip at all (`.tar.gz`, say), is a cheap no-op. Members
+    from more than one console are treated as ambiguous, same as
+    `single_console_from_members` above -- `(None, None)` either way.
+
+    `serial` (PS1/PS2 only) comes from whichever candidate member actually
+    has the ISO9660 filesystem with `SYSTEM.CNF` on it -- a multi-track
+    dump of one disc (several `.bin` tracks + the data track) naturally
+    has only one such member, so this never has to choose between
+    conflicting serials for a genuine single-disc set.
     """
     candidates = [
         name
@@ -111,20 +118,25 @@ def console_from_zip_members(path: Path, members: list[str]) -> str | None:
         if not name.endswith("/") and Path(name).suffix.lower() in DISC_EXTENSIONS_IN_ARCHIVE
     ]
     if not candidates:
-        return None
+        return None, None
 
     consoles: set[str] = set()
+    serial: str | None = None
     try:
         with zipfile.ZipFile(path) as zf:
             for name in candidates:
                 try:
                     with zf.open(name) as member_f:
-                        console = console_from_disc_stream(member_f)
+                        result = console_from_disc_stream(member_f)
                 except (zipfile.BadZipFile, KeyError, OSError):
-                    console = None
-                if console:
+                    result = None
+                if result:
+                    console, member_serial = result
                     consoles.add(console)
+                    serial = member_serial or serial
     except (zipfile.BadZipFile, OSError):
-        return None
+        return None, None
 
-    return consoles.pop() if len(consoles) == 1 else None
+    if len(consoles) == 1:
+        return consoles.pop(), serial
+    return None, None

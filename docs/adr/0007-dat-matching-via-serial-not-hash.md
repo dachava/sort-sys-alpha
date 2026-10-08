@@ -41,9 +41,9 @@ few extra bytes already in hand, normalized and looked up.
   existing header/SYSTEM.CNF detection; a DAT match only replaces the name
   hint `naming.py` slugifies into the final filename. No category logic
   changes.
-- **Scope: loose PS1/PS2 discs only.** Zipped discs already get console
-  detection (ADR from the zip-member work earlier this session) but not
-  DAT-matched naming -- that's a reasonable follow-up, not bundled here.
+- **Scope: loose PS1/PS2 discs only.** Zipped discs got console detection
+  without DAT-matched naming here; naming for a zipped disc was added
+  later, see ADR 0011.
 - **Not a replacement for hash-based matching.** This only verifies "a
   disc with this serial is canonically called X" -- it says nothing about
   whether the dump is a known-good, unmodified copy. A real
@@ -54,8 +54,8 @@ few extra bytes already in hand, normalized and looked up.
 ## Consequences
 - `identify/disk_images.py`'s `_ps1_or_ps2` now returns `(console, serial)`
   instead of just `console`; `console_from_disc_stream` (the zip-member
-  path) unpacks and discards the serial, since zipped DAT naming isn't in
-  scope yet.
+  path) originally unpacked and discarded the serial, until ADR 0011 wired
+  it through for zipped-disc naming too.
 - `route.py`'s `kind == "disk_image"` branch calls `dat.lookup_title()`
   when a serial was read, preferring a DAT match over the volume label.
 - If a later milestone adds genuine hash-keyed DAT support (cartridge

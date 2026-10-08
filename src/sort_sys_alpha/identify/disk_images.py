@@ -82,24 +82,24 @@ def _read_at(path: Path, offset: int, length: int) -> bytes:
         return b""
 
 
-def console_from_disc_stream(f: Any) -> str | None:
-    """PS1/PS2/PSP/Saturn/PC-Engine CD console from an already-open disc
-    stream (a loose file handle, or a zip member) -- the same inspection as
-    a loose disc file, minus the Nintendo magic-byte checks that only apply
-    to a whole file on disk. Returns None for a generic/unrecognized
-    ISO9660 volume too (plenty of those aren't game discs), not just a
-    non-disc stream.
+def console_from_disc_stream(f: Any) -> tuple[str, str | None] | None:
+    """(console, serial) from an already-open disc stream (a loose file
+    handle, or a zip member) -- the same inspection as a loose disc file,
+    minus the Nintendo magic-byte checks that only apply to a whole file on
+    disk. `serial` is only ever set for PS1/PS2. Returns None for a
+    generic/unrecognized ISO9660 volume too (plenty of those aren't game
+    discs), not just a non-disc stream.
     """
     view = open_logical_view(f)
     pvd = read_pvd(view)
     if pvd is None:
-        return _boot_magic_console(view)
+        console = _boot_magic_console(view)
+        return (console, None) if console else None
     root_entries = list_root_entries(view, pvd)
     if root_entries & PS_MARKERS:
-        console, _serial = _ps1_or_ps2(view, pvd)
-        return console
+        return _ps1_or_ps2(view, pvd)
     if root_entries & PSP_MARKERS:
-        return "psp"
+        return ("psp", None)
     return None
 
 

@@ -16,7 +16,12 @@ from .config import Config, Rule
 from .dat import lookup_title, lookup_title_by_crc
 from .identify.archives import console_from_zip_members
 from .identify.audio_video import AUDIO_EXTENSIONS
-from .identify.roms import msx_console_from_archive, single_console_from_members
+from .identify.roms import (
+    member_crc32,
+    msx_console_from_archive,
+    single_console_from_members,
+    single_rom_member,
+)
 from .identify.types import Evidence
 from .items import FileGroup, FolderUnit, ScanItem
 from .llm.backend import LlmError, backend_for
@@ -106,18 +111,39 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
 
     if kind == "archive":
         members = details.get("members", [])
+        name_hint: str | None = None
+
         console = single_console_from_members(evidence.path, members)
-        reason = f"archive of {console} ROMs (members, extension-only)" if console else None
+        if console:
+            member = single_rom_member(members)
+            crc32 = member_crc32(evidence.path, member) if member else None
+            title = lookup_title_by_crc(console, crc32, config.roms.dat_files) if crc32 else None
+            name_hint = title
+            reason = (
+                f"archive of {console} ROM, DAT match: {title}"
+                if title
+                else f"archive of {console} ROMs (members, extension-only)"
+            )
+
         if console is None:
-            console = console_from_zip_members(evidence.path, members)
-            reason = f"archive containing a {console} disc image" if console else None
+            console, serial = console_from_zip_members(evidence.path, members)
+            if console:
+                title = lookup_title(console, serial, config.roms.dat_files) if serial else None
+                name_hint = title
+                reason = (
+                    f"archive containing a {console} disc, DAT match: {title}"
+                    if title
+                    else f"archive containing a {console} disc image"
+                )
+
         if console is None:
             console = msx_console_from_archive(evidence.path, members)
             reason = f"archive of {console} ROMs (members + archive name)" if console else None
+
         if console:
             folder = f"ROMs/{console}"
             if folder in allowlist:
-                return RouteVerdict(folder, 1.0, reason)
+                return RouteVerdict(folder, 1.0, reason, name_hint)
         return RouteVerdict("Archives", 1.0, "archive")
 
     if kind == "rom":

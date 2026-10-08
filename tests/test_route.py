@@ -230,6 +230,78 @@ def test_zip_of_single_console_roms_routes_to_console_folder(tmp_path: Path) -> 
     assert verdict.category == "ROMs/snes"
 
 
+def test_zip_with_single_rom_gets_dat_matched_title(tmp_path: Path) -> None:
+    import zlib
+
+    from fixtures.make import make_zip
+
+    data = b"\x00" * 10
+    crc_hex = f"{zlib.crc32(data) & 0xFFFFFFFF:08X}"
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(f'game (\n  comment "Chrono Trigger (USA)"\n  rom ( crc {crc_hex} )\n)\n')
+
+    path = tmp_path / "chrono-trigger.zip"
+    make_zip(path, {"Chrono Trigger.sfc": data})
+
+    config = Config.model_validate({"roms": {"dat_files": {"snes": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/snes"
+    assert verdict.name_hint == "Chrono Trigger (USA)"
+
+
+def test_zip_with_multiple_roms_has_no_dat_name_hint(tmp_path: Path) -> None:
+    import zlib
+
+    from fixtures.make import make_zip
+
+    data = b"\x00" * 10
+    crc_hex = f"{zlib.crc32(data) & 0xFFFFFFFF:08X}"
+    dat_path = tmp_path / "snes.dat"
+    dat_path.write_text(f'game (\n  comment "Chrono Trigger (USA)"\n  rom ( crc {crc_hex} )\n)\n')
+
+    path = tmp_path / "snes-collection.zip"
+    make_zip(path, {"Chrono Trigger.sfc": data, "Earthbound.sfc": data})
+
+    config = Config.model_validate({"roms": {"dat_files": {"snes": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/snes"
+    assert verdict.name_hint is None
+
+
+def test_zip_disc_with_dat_match_uses_canonical_title(tmp_path: Path) -> None:
+    from fixtures.make import _build_raw_cd_bin, make_zip
+
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    raw = _build_raw_cd_bin("GAME", {"SYSTEM.CNF": system_cnf}, mode=2)
+
+    dat_path = tmp_path / "psx.dat"
+    dat_path.write_text(
+        'game (\n  name "Crash Bandicoot (USA)"\n  serial "SCUS-12345"\n)\n'
+    )
+
+    path = tmp_path / "crash-bandicoot.zip"
+    make_zip(path, {"Crash Bandicoot.bin": raw, "Crash Bandicoot.cue": b"junk"})
+
+    config = Config.model_validate({"roms": {"dat_files": {"psx": str(dat_path)}}})
+    verdict = route(build_evidence(path), config)
+    assert verdict.category == "ROMs/psx"
+    assert verdict.name_hint == "Crash Bandicoot (USA)"
+
+
+def test_zip_disc_without_dat_match_has_no_name_hint(tmp_path: Path) -> None:
+    from fixtures.make import _build_raw_cd_bin, make_zip
+
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    raw = _build_raw_cd_bin("GAME", {"SYSTEM.CNF": system_cnf}, mode=2)
+
+    path = tmp_path / "crash-bandicoot.zip"
+    make_zip(path, {"Crash Bandicoot.bin": raw, "Crash Bandicoot.cue": b"junk"})
+
+    verdict = route(build_evidence(path), Config())
+    assert verdict.category == "ROMs/psx"
+    assert verdict.name_hint is None
+
+
 def test_zip_ignores_incidental_non_rom_members(tmp_path: Path) -> None:
     from fixtures.make import make_zip
 

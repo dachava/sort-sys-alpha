@@ -205,6 +205,9 @@ is held (it's not renamed with a gap).
     serial-keyed "Data Center" DAT (ADR 0007) -- no content hash involved.
   - Cartridge consoles (NES/SNES/Genesis/GBA/N64/GB/GBC/GameGear/32X/SG-1000/MasterSystem, …) get an exact
     title by CRC32 of the whole ROM file against a "libretro-database" developer DAT (ADR 0008).
+  - A zip/7z also gets a DAT-matched title, not just console detection, when it contains exactly one
+    recognizable ROM (cartridge CRC32) or disc (serial) -- a genuinely mixed-game archive keeps its
+    filename, since there's no single title to assign it (ADR 0011).
   - Arcade sets, and byte-for-byte dump *verification* against No-Intro/Redump (as opposed to title lookup),
     are separate, not-yet-built scope.
 
@@ -355,7 +358,7 @@ sort-sys-alpha/
 | M4 | Windows: Zone.Identifier, lock detection, Scheduled Task script (runs only when the PC is idle, so it doesn't compete with games for the GPU), `auto`/`plan` modes, toast notifications | weekly run on the real PC in both modes |
 | M5 | Feedback + `eval` | accuracy and latency for 2–3 models × Ollama vs Lemonade |
 | M6 | Vision (images, scanned PDFs), blog post | — |
-| M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs -- PS1/PS2/PSP serial matching done (ADR 0007) and cartridge CRC32 matching done (ADR 0008); arcade sets and byte-for-byte dump verification still open |
+| M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs -- PS1/PS2/PSP serial matching (ADR 0007), cartridge CRC32 matching (ADR 0008), and single-item zip/7z naming (ADR 0011) all done; arcade sets and byte-for-byte dump verification still open |
 | M8 | Naming conventions: per-category templates, field extraction, rename-only runs | `{title}` default done (ADR 0010); per-category overrides, full field extraction, and rename-only runs still open |
 
 ## 11. Decisions
