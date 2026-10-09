@@ -3,7 +3,7 @@ from pathlib import Path
 
 from sort_sys_alpha.config import Config
 from sort_sys_alpha.feedback import read_routing_entries
-from sort_sys_alpha.plan import build_plan, load_plan, render_report, write_plan
+from sort_sys_alpha.plan import build_plan, build_rename_plan, load_plan, render_report, write_plan
 from sort_sys_alpha.scan import STATE_DIR_NAME
 
 
@@ -262,3 +262,81 @@ def test_render_report_lists_moves_and_holds(tmp_path: Path) -> None:
     assert "## Held (1)" in report
     assert "notes.txt" in report
     assert "mystery.xyz123" in report
+
+
+def test_build_rename_plan_recovers_real_title_from_content(tmp_path: Path) -> None:
+    from fixtures.make import make_docx
+
+    config = _config(tmp_path)
+    docs_dir = config.dest / "Documents"
+    docs_dir.mkdir(parents=True)
+    make_docx(docs_dir / "2026-01-01_old-slug-name.docx", title="Quarterly Report")
+
+    the_plan = build_rename_plan(config)
+    assert len(the_plan.moves) == 1
+    move = the_plan.moves[0]
+    assert move.target == docs_dir / "Quarterly Report.docx"
+    assert the_plan.holds == []
+
+
+def test_build_rename_plan_holds_instead_of_recategorizing(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    # A .nes ROM sitting in the wrong folder -- fresh identification would
+    # say ROMs/nes, but it's currently filed under Documents.
+    docs_dir = config.dest / "Documents"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "mystery.nes").write_bytes(b"NES\x1a" + b"\x00" * 50)
+
+    the_plan = build_rename_plan(config)
+    assert the_plan.moves == []
+    assert len(the_plan.holds) == 1
+    assert "ROMs/nes" in the_plan.holds[0].reason
+    assert "re-triage" in the_plan.holds[0].reason
+
+
+def test_build_rename_plan_skips_a_name_that_already_matches(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    docs_dir = config.dest / "Documents" / "Notes"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "Shopping List.txt").write_text("milk, eggs")
+
+    the_plan = build_rename_plan(config)
+    assert the_plan.moves == []
+    assert the_plan.holds == []
+
+
+def test_build_rename_plan_respects_path_scope(tmp_path: Path) -> None:
+    from fixtures.make import make_docx
+
+    config = _config(tmp_path)
+    docs_dir = config.dest / "Documents"
+    images_dir = config.dest / "Images"
+    docs_dir.mkdir(parents=True)
+    images_dir.mkdir(parents=True)
+    make_docx(docs_dir / "2026-01-01_old-slug.docx", title="Real Title")
+    (images_dir / "2026-01-01_old-photo-slug.jpg").write_bytes(b"\x00")
+
+    the_plan = build_rename_plan(config, path=docs_dir)
+    renamed = {move.move_root.name for move in the_plan.moves}
+    assert renamed == {"2026-01-01_old-slug.docx"}
+
+
+def test_build_rename_plan_holds_both_sides_of_an_existing_duplicate_pair(
+    tmp_path: Path,
+) -> None:
+    """Two already-filed files that happen to be byte-identical get held
+    on *both* sides, not just one -- the ADR 0009 check runs per file, and
+    each one finds the other sitting in the same folder. Not destructive
+    (nothing moves or is deleted), just an honest "something's off here,
+    not touching either" rather than silently picking one as the winner.
+    """
+    config = _config(tmp_path)
+    archives_dir = config.dest / "Archives"
+    archives_dir.mkdir(parents=True)
+    (archives_dir / "Game (USA).zip").write_bytes(b"same content")
+    (archives_dir / "2026-01-01_old-slug.zip").write_bytes(b"same content")
+
+    the_plan = build_rename_plan(config)
+    assert the_plan.moves == []
+    assert len(the_plan.holds) == 2
+    assert all("exact duplicate" in hold.reason for hold in the_plan.holds)

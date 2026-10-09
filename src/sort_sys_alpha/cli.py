@@ -15,7 +15,7 @@ from .identify import identify_item
 from .journal import last_run_id, undo_run
 from .llm.backend import describe_backend
 from .notify import notify
-from .plan import PLAN_FILENAME, build_plan, load_plan, write_plan
+from .plan import PLAN_FILENAME, build_plan, build_rename_plan, load_plan, write_plan
 from .prune import prune_empty_folders
 from .scan import STATE_DIR_NAME
 from .scan import scan as run_scan
@@ -202,6 +202,28 @@ def prune(
     for path in result.removed:
         typer.echo(f"removed: {path}")
     typer.echo(f"removed {len(result.removed)} empty folder(s).")
+
+
+@app.command()
+def rename(
+    config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
+    path: Path | None = typer.Option(
+        None, "--path", help="Scope to one folder under dest instead of the whole filed tree."
+    ),
+) -> None:
+    """Recompute names for already-filed files using today's naming
+    templates. Never recategorizes -- a file whose fresh identification
+    disagrees with its current folder is held, not moved. See ADR 0012.
+    """
+    config = load_config(config_path)
+    start = time.monotonic()
+    the_plan = build_rename_plan(config, path=path, on_item=_progress)
+    label = f"rename-{path.name}" if path else "rename"
+    plan_path, report_path = write_plan(the_plan, config, label=label)
+    typer.echo(f"{len(the_plan.moves)} to rename, {len(the_plan.holds)} held.")
+    typer.echo(f"plan: {plan_path}")
+    typer.echo(f"report: {report_path}")
+    typer.echo(f"done in {_format_duration(time.monotonic() - start)}")
 
 
 @app.command()

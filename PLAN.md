@@ -230,7 +230,8 @@ sort-sys-alpha run [--source DIR]  # plan + apply with gates (what the scheduler
 sort-sys-alpha undo [RUN_ID|last]
 sort-sys-alpha eval                # run the labeled fixture set, print accuracy per category
 sort-sys-alpha doctor              # check model server, config, permissions
-sort-sys-alpha prune               # remove empty folders under source, recursively (ADR 0006)
+sort-sys-alpha prune                # remove empty folders under source, recursively (ADR 0006)
+sort-sys-alpha rename [--path DIR]  # recompute names for already-filed files, never recategorizes (ADR 0012)
 ```
 
 `--source` overrides `config.toml`'s `source` for one run without editing the file -- e.g. re-triaging
@@ -359,7 +360,7 @@ sort-sys-alpha/
 | M5 | Feedback + `eval` | accuracy and latency for 2–3 models × Ollama vs Lemonade |
 | M6 | Vision (images, scanned PDFs), blog post | — |
 | M7 | ROM DAT matching (No-Intro/Redump, local DAT files) | exact titles for hashed ROMs -- PS1/PS2/PSP serial matching (ADR 0007), cartridge CRC32 matching (ADR 0008), and single-item zip/7z naming (ADR 0011) all done; arcade sets and byte-for-byte dump verification still open |
-| M8 | Naming conventions: per-category templates, field extraction, rename-only runs | `{title}` default done (ADR 0010); per-category overrides, full field extraction, and rename-only runs still open |
+| M8 | Naming conventions: per-category templates, field extraction, rename-only runs | `{title}` default (ADR 0010) and the `rename` command (ADR 0012) both done; per-category overrides and full field extraction still open |
 
 ## 11. Decisions
 
@@ -380,6 +381,8 @@ sort-sys-alpha/
   the separate, manual `prune` command (ADR 0006) -- hard rule 5's one deliberate, scoped exception.
 - **Naming default:** `{title}` (human-readable, sanitized, no date prefix) for every category, not a
   date-prefixed slug (ADR 0010) -- `{slug}`/`{date}` stay available for a custom per-category override.
+- **Rename-only runs:** a dedicated `rename` command re-applies today's naming templates (and any newer
+  DAT match) to already-filed files, never recategorizing them (ADR 0012).
 
 **Still open**
 1. **Per-category naming overrides:** whether any category wants something other than the new `{title}`

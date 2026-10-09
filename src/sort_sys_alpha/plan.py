@@ -20,7 +20,7 @@ from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
 from .items import FileItem, FolderUnit, ScanItem
 from .llm.prompts import PROMPT_VERSION
-from .route import resolve
+from .route import resolve, route
 from .scan import STATE_DIR_NAME, scan
 
 PLAN_FILENAME = "plan.json"
@@ -183,6 +183,102 @@ def build_plan(
         moves=moves,
         holds=holds,
         grab_bag_dirs=scan_result.grab_bag_dirs,
+    )
+
+
+def build_rename_plan(
+    config: Config,
+    *,
+    path: Path | None = None,
+    run_id: str | None = None,
+    on_item: Callable[[int, int, str], None] | None = None,
+) -> Plan:
+    """Recompute names for files already filed under `dest` -- scoped to
+    `path` if given, else the whole filed tree -- using today's naming
+    templates. See `docs/adr/0012-rename-only-run.md`.
+
+    Reuses `gate_item()` for every existing safety check (confidence, name
+    safety, the ADR 0009 duplicate-against-dest check, ...) by re-running
+    identify/route fresh on each file and gating the result exactly like a
+    normal plan would. One rule on top of that gate.py doesn't itself
+    know about: a verdict whose category disagrees with the file's
+    *current* folder is held, never used to move it to a different
+    category -- re-triaging category is `--source`'s job; this only ever
+    renames a file within the folder it's already in. Rules tier only, no
+    LLM call, so this stays fast and free to run on a whole filed tree.
+
+    Only loose files are considered -- a `FolderUnit`'s own name (a whole
+    directory) is out of scope here, same as ADR 0009's duplicate check.
+    """
+    created = datetime.now(UTC)
+    run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
+    root = path or config.dest
+    state_dir = config.dest / STATE_DIR_NAME
+
+    try:
+        files = sorted(
+            p for p in root.rglob("*") if p.is_file() and state_dir not in (p, *p.parents)
+        )
+    except OSError:
+        files = []
+
+    total = len(files)
+    moves: list[PlanMove] = []
+    holds: list[PlanHold] = []
+
+    for index, file in enumerate(files, start=1):
+        if on_item is not None:
+            on_item(index, total, file.name)
+
+        try:
+            current_category = file.parent.relative_to(config.dest).as_posix()
+        except ValueError:
+            continue  # not actually under dest -- ignore, not ours to rename
+
+        evidence = identify_item(FileItem(file))
+        verdict = route(evidence, config)
+        if verdict is None:
+            holds.append(PlanHold(sources=[file], reason="no rule-tier verdict to rename from"))
+            continue
+
+        decision = gate_item(FileItem(file), evidence, verdict, config)
+        if isinstance(decision, HoldDecision):
+            holds.append(PlanHold(sources=[file], reason=decision.reason))
+            continue
+
+        if decision.category != current_category:
+            holds.append(
+                PlanHold(
+                    sources=[file],
+                    reason=(
+                        f"fresh identification suggests {decision.category!r}, not its "
+                        f"current {current_category!r} -- re-triage with --source instead "
+                        "of renaming in place"
+                    ),
+                )
+            )
+            continue
+
+        if decision.target == file:
+            continue  # name already matches today's template, nothing to do
+
+        moves.append(
+            PlanMove(
+                sources=[file],
+                move_root=file,
+                category=decision.category,
+                name=decision.name,
+                target=decision.target,
+                confidence=decision.confidence,
+                reason=decision.reason,
+                size=file.stat().st_size,
+                mtime=file.stat().st_mtime,
+                suggest_delete=decision.suggest_delete,
+            )
+        )
+
+    return Plan(
+        run_id=run_id, created=created, source=root, dest=config.dest, moves=moves, holds=holds
     )
 
 

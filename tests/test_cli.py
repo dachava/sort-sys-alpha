@@ -240,6 +240,38 @@ def test_prune_with_nothing_to_remove(tmp_path: Path) -> None:
     assert "no empty folders found." in result.output
 
 
+def test_rename_writes_a_labeled_plan_and_report(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    docs_dir = source / "_Filed" / "Documents"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "2026-01-01_already-fine.txt").write_text("hi")
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(app, ["rename", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "to rename" in result.output
+    state_dir = source / "_Filed" / ".sort-sys-alpha"
+    assert (state_dir / "report-rename.md").exists()
+    assert (state_dir / "plan-rename.json").exists()
+    assert not (state_dir / "report.md").exists()
+
+
+def test_rename_with_path_labels_output_with_folder_name(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    docs_dir = source / "_Filed" / "Documents"
+    docs_dir.mkdir(parents=True)
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(
+        app, ["rename", "--config", str(config_path), "--path", str(docs_dir)]
+    )
+    assert result.exit_code == 0
+    state_dir = source / "_Filed" / ".sort-sys-alpha"
+    assert (state_dir / "report-rename-Documents.md").exists()
+
+
 def test_undo_with_no_runs_fails_cleanly(tmp_path: Path) -> None:
     source = tmp_path / "Downloads"
     source.mkdir()
