@@ -177,12 +177,18 @@ projects) upgrades a correctly-identified ROM from a bare volume label or
 filename to its real title, using two different keys depending on shape:
 PS1/PS2/PSP discs are matched by the serial already read from
 `SYSTEM.CNF` against a serial-keyed DAT; cartridge consoles (NES, SNES,
-Genesis, GBA, N64, GB/GBC, FDS, and more as DAT files get added) are
-matched by a CRC32 of the whole ROM file against a differently-shaped,
-hash-keyed DAT. Neither is byte-for-byte dump *verification* against
-No-Intro/Redump — that's a real, separate, not-yet-built thing — these
-only establish "a ROM/disc with this serial or hash is canonically called
-X."
+Genesis, GBA, N64, GB/GBC, FDS, Game Gear, Master System, 32X, SG-1000,
+and more as DAT files get added) are matched by a CRC32 of the whole ROM
+file against a differently-shaped, hash-keyed DAT. The same matching
+reaches inside a zip/7z too, but only when the archive contains exactly
+one identifiable game — a strictly single-member check for cartridge
+zips (stricter than the console-detection check, which still allows
+several same-console members for a legitimate multi-game collection), and
+naturally single for a disc zip since a multi-track dump of one disc only
+ever has one member with the filesystem carrying the serial. Neither
+shape is byte-for-byte dump *verification* against No-Intro/Redump —
+that's a real, separate, not-yet-built thing — these only establish "a
+ROM/disc with this serial or hash is canonically called X."
 
 ### The bugs that taught the lesson
 
@@ -266,7 +272,9 @@ from them.
 Detection gets better over time (a new DAT file, a newly-supported
 console, a fixed false positive), which raises an obvious question: what
 about everything that already got filed — or misfiled — under the old
-rules? `--source` answers this without any new machinery: it overrides
+rules? Two commands answer two different versions of that question.
+
+`--source` answers "should this have gone somewhere else." It overrides
 `config.toml`'s `source` for one run only, so `plan --source
 Downloads\_Filed\Archives` re-triages an already-filed folder against
 today's rules, using the exact same `dest`, DAT files, and allowlist as a
@@ -275,6 +283,25 @@ normal run. The override's own folder name labels the output
 the normal run's report, and the duplicate-against-destination check above
 means anything that would've been a re-file doesn't just pile up as a
 redundant copy next to where it already correctly landed.
+
+`rename` answers the narrower "same folder, better name" question — for
+when a naming convention changed (ADR 0010) or a new DAT match exists for
+something that's already correctly filed, and recategorizing was never
+the question. It re-runs identify/route fresh on every already-filed
+file and recomputes its name, but *never* moves it to a different
+category: a fresh verdict that disagrees with the file's current folder
+gets held with an explicit "use `--source` instead" reason rather than
+acted on. It reuses the exact same `gate_item()` safety checks a normal
+plan does (ADR 0012).
+
+One real bug only showed up when actually running the `--source` rescan
+for real: the duplicate-against-destination check didn't exclude a
+candidate's own path from its search, so re-triaging a folder *already
+inside* `dest` made a file match itself and get held as "an exact
+duplicate of itself." Fixed by excluding the candidate's own path from
+the comparison — a small reminder that "scan a folder that's also the
+destination" is a genuinely different case from "scan `source`, file into
+`dest`," even though both reuse the identical duplicate-check code.
 
 ## Windows integration
 
@@ -301,6 +328,7 @@ sort-sys-alpha undo [RUN_ID|last]   # revert a run via the move journal
 sort-sys-alpha eval                 # score the labeled fixture set
 sort-sys-alpha doctor               # check model server, config, permissions
 sort-sys-alpha prune                # remove empty folders under source, recursively
+sort-sys-alpha rename [--path DIR]  # recompute names for already-filed files, never recategorizes
 ```
 
 `--config` overrides the config file path on every command; `--source`
@@ -318,15 +346,17 @@ never collides with a normal run's report.
 | M4 | Windows integration, Scheduled Task, auto/plan modes, notifications | done |
 | M5 | Feedback loop + eval | done |
 | M6 | Vision (images, scanned PDFs) | explicitly deprioritized — routing is format-based, not content-based, so vision doesn't change any decision this tool makes |
-| M7 | ROM DAT matching | PS1/PS2/PSP serial matching and cartridge CRC32 matching both done; arcade sets and byte-for-byte dump verification against No-Intro/Redump remain open |
-| M8 | Per-category naming templates | `{title}` (human-readable, no date prefix) is the default for every category now (ADR 0010); per-category overrides and full field extraction still open |
+| M7 | ROM DAT matching | PS1/PS2/PSP serial matching, cartridge CRC32 matching (12 consoles now), and single-item zip/7z naming all done; arcade sets and byte-for-byte dump verification against No-Intro/Redump remain open |
+| M8 | Per-category naming templates | `{title}` default (ADR 0010) and the `rename` command (ADR 0012) both done; per-category overrides and full field extraction still open |
 
 Also still open, called out explicitly rather than silently assumed: dedup
 stays loose-file-only (a duplicate whole folder, or a duplicate hiding
 inside two different archives, isn't detected); `.7z` disc-in-archive
-detection isn't implemented for the cost reasons above; and a few
-cartridge consoles with no header signature (SNES, NDS, Wii homebrew) stay
-extension-only by design, not by oversight.
+detection isn't implemented for the cost reasons above; a genuinely
+mixed-game zip still gets no DAT-matched name, correctly, since there's no
+single title to assign a whole archive of unrelated games; and a few
+cartridge consoles with no header signature (SNES, NDS, Wii homebrew,
+SG-1000) stay extension-only by design, not by oversight.
 
 ## Decision record index
 
@@ -348,3 +378,9 @@ it was made:
   from 0007's.
 - **0009** — Extending 0005's duplicate detection to also check against
   what's already filed, not just the current scan batch.
+- **0010** — `{title}` (human-readable, no date prefix) replaces
+  `{date}_{slug}` as the naming default for every category.
+- **0011** — Extending 0007/0008's DAT matching to a single-item zip/7z,
+  not just a loose file.
+- **0012** — The `rename` command: recomputes names for already-filed
+  files, never recategorizes.

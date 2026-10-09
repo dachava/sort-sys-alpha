@@ -24,17 +24,19 @@ function names — they're written to be read as a sentence.
 
 ### `cli.py`
 Typer app wiring every subcommand (`scan`, `plan`, `apply`, `run`, `undo`,
-`eval`, `doctor`, `prune`) to the library functions that do the real work —
-this file has almost no logic of its own, deliberately. The one piece of
-real logic is `_apply_source_override()`: `--source` does
+`eval`, `doctor`, `prune`, `rename`) to the library functions that do the
+real work — this file has almost no logic of its own, deliberately. The
+one piece of real logic is `_apply_source_override()`: `--source` does
 `config.model_copy(update={"source": source.expanduser()})` rather than
 mutating config in place, so the override only ever affects the `Config`
 object passed to that one call, never the file on disk. `plan`/`run` pass
 `source.name` as `write_plan()`'s `label`, so an overridden run's output
 files are named after the overridden folder instead of colliding with a
-normal run's `plan.json`/`report.md`. `_progress`/`_resolved` print to
-*stderr*, not stdout, specifically so a script piping `plan`'s final
-summary line isn't polluted by the per-item progress output.
+normal run's `plan.json`/`report.md`; `rename` does the same with a
+`"rename"`/`"rename-<folder>"` label (ADR 0012), computed from `--path`
+the same way. `_progress`/`_resolved` print to *stderr*, not stdout,
+specifically so a script piping `plan`'s final summary line isn't
+polluted by the per-item progress output.
 
 **Tests** (`test_cli.py`): `test_help`/`test_subcommands_registered` pin
 the CLI surface; one test per command exercises it end-to-end against a
@@ -43,8 +45,10 @@ real temp directory (`test_scan_reports_a_file`,
 `test_run_in_auto_mode_moves_files`, `test_plan_then_apply_then_undo`,
 `test_prune_removes_empty_folders`, `test_doctor_reports_backend_reachability`).
 `test_plan_source_override` specifically checks the labeled-output
-behavior (`report-Archives.md` exists, plain `report.md` doesn't).
-`test_apply_without_a_plan_fails_cleanly` and
+behavior (`report-Archives.md` exists, plain `report.md` doesn't);
+`test_rename_writes_a_labeled_plan_and_report` /
+`test_rename_with_path_labels_output_with_folder_name` check the same
+thing for `rename`. `test_apply_without_a_plan_fails_cleanly` and
 `test_undo_with_no_runs_fails_cleanly` cover the "nothing to do yet" exit
 paths.
 
@@ -211,6 +215,12 @@ rules-tier `kind` branches mostly map 1:1 to an `identify/` extractor's
   (`console_from_zip_members`, reads member bytes, zip-only), then MSX's
   filename-corroborated `.rom` check (`msx_console_from_archive`) — in
   that order, each a no-op if the previous step already found a console.
+  As of ADR 0011, the first two steps also try a DAT lookup: a single
+  recognized cartridge member gets its CRC32 hashed (`single_rom_member`
+  + `member_crc32`) for `lookup_title_by_crc`; a disc member's serial
+  (now threaded through `console_from_zip_members`'s return value) goes
+  to `lookup_title`. Either way the result only ever becomes `name_hint`,
+  never changes which console/folder was already decided.
 - **`kind == "disk_image"`'s DAT lookup**: only attempted when a serial
   was actually read (PS1/PS2/PSP); the matched title replaces the ISO
   volume label as `name_hint`, never changes the category.
@@ -228,7 +238,7 @@ rules-tier `kind` branches mostly map 1:1 to an `identify/` extractor's
   either tier here; they arrive with a category already decided by
   `subfolders.classify_subfolder`.
 
-**Tests** (`test_route.py`, 44 cases — the largest test file in the repo):
+**Tests** (`test_route.py`, 53+ cases — the largest test file in the repo):
 covers every rule-tier branch individually, the full `.md`/Genesis
 collision pair (`test_unverified_genesis_md_falls_back_to_note` /
 `test_verified_genesis_rom_with_md_extension_still_routes`), every DAT
@@ -237,8 +247,16 @@ every archive scenario (single-console zip/7z, mixed-console zip stays
 `Archives`, a zip with a disc image inside, the MSX name-corroboration
 pair, the README.md-false-positive pair
 `test_zip_with_only_readme_md_stays_archive`/`test_zip_with_header_verified_genesis_md_routes_to_console`),
-and the `resolve()`-level tier-dispatch behavior
-(`test_resolve_folder_unit_never_calls_the_model`,
+the ADR 0011 zip DAT-naming pairs
+(`test_zip_with_single_rom_gets_dat_matched_title`/
+`test_zip_with_multiple_roms_has_no_dat_name_hint`,
+`test_zip_disc_with_dat_match_uses_canonical_title`/
+`test_zip_disc_without_dat_match_has_no_name_hint`), the four newer
+consoles (`test_game_gear_header_verified_routes_to_console_folder`,
+`test_sega_32x_header_verified_routes_to_console_folder`,
+`test_sms_without_header_is_not_routed`,
+`test_sg1000_extension_only_still_routes`), and the `resolve()`-level
+tier-dispatch behavior (`test_resolve_folder_unit_never_calls_the_model`,
 `test_resolve_file_group_skips_the_llm_tier`,
 `test_resolve_falls_back_to_the_llm_when_no_rule_matches`,
 `test_resolve_holds_with_the_llm_error_when_unreachable`).
@@ -317,6 +335,18 @@ Orchestrates one full `scan → identify → route → gate` pass into a
   `report-<label>.md` — this is the only thing standing between a rescan
   and silently overwriting a normal run's report.
 
+**`build_rename_plan()`** (ADR 0012) is a sibling plan-builder with a
+different source of moves: instead of scanning `source`, it walks files
+already filed under `dest` (or just `path` if scoped) and recomputes each
+one's name. It reuses `gate_item()` wholesale for every existing safety
+check, then layers on one more: if the fresh verdict's category disagrees
+with the file's *current* folder, that's held with an explicit
+"re-triage with `--source` instead" reason rather than acted on — this
+function only ever renames within a file's existing folder, never moves
+it to a different one. A file whose computed target already equals its
+current path is silently skipped (not even a hold) — nothing to report.
+Rules tier only, no LLM call, so a whole-tree run stays fast and free.
+
 **Tests** (`test_plan.py`): the move/hold split
 (`test_build_plan_separates_moves_and_holds`), the unreachable-model hold
 (`test_build_plan_holds_with_model_unreachable_reason`), a full LLM-tier
@@ -332,6 +362,14 @@ within-batch duplicate path never reaching the LLM
 (`test_build_plan_holds_exact_duplicates_without_touching_the_llm`),
 scan-skips surfacing as holds, a non-cp1252-safe filename round-tripping
 through `write_plan()` correctly, and `plan.json`'s own JSON round-trip.
+`build_rename_plan()` gets its own set: recovering a real title from
+content a stale filename couldn't show
+(`test_build_rename_plan_recovers_real_title_from_content`), holding
+instead of recategorizing
+(`test_build_rename_plan_holds_instead_of_recategorizing`), skipping a
+name that's already correct, respecting `path` scoping, and the
+both-sides-held behavior for two already-filed files that turn out to be
+byte-identical (`test_build_rename_plan_holds_both_sides_of_an_existing_duplicate_pair`).
 
 ### `apply.py`
 The only module allowed to touch `source`. `_is_stale()` is the plan/apply
@@ -453,14 +491,22 @@ considered empty.
 ### `duplicates.py`
 Covered in depth in `how-it-works.md`'s "Duplicates" section and ADRs
 0005/0009. Both functions share the same size-before-hash cost bound.
+`find_duplicate_in_dest()` excludes the candidate's own path from its
+search — needed because a `--source` rescan of a folder already inside
+`dest` can pass a path that's already sitting in the exact directory
+being searched, which would otherwise match itself and report "an exact
+duplicate of itself" (found by actually running that rescan for real).
 
-**Tests** (`test_duplicates.py` for `partition_duplicates`; the
-dest-against check is tested through `gate.py`/`plan.py` instead, since
-it needs a computed target, not just a list of items): two identical
-files (one kept, one held), same-size-different-content is *not* flagged,
-a three-way duplicate group keeps only the first, `FileGroup`/`FolderUnit`
-items pass through untouched regardless of content, and a lone file isn't
-a duplicate of anything.
+**Tests** (`test_duplicates.py`): `partition_duplicates` gets two
+identical files (one kept, one held), same-size-different-content is
+*not* flagged, a three-way duplicate group keeps only the first,
+`FileGroup`/`FolderUnit` items pass through untouched regardless of
+content, and a lone file isn't a duplicate of anything.
+`find_duplicate_in_dest()` gets its own direct tests too (a real sibling
+match, the self-exclusion case, no match, and a missing destination
+directory) alongside the end-to-end coverage through `gate.py`/`plan.py`
+(which exercises it with an actual computed target, not just a bare
+function call).
 
 ### `feedback.py`
 Append-only `routing.jsonl`, written **only** for LLM-tier verdicts —
@@ -793,6 +839,9 @@ plus the handful of formats that *aren't* ISO9660 at all:
   logic as the loose-file path, minus the Nintendo magic-byte checks
   (those need a whole file on disk at fixed absolute offsets in a way
   that doesn't translate to "a stream that happens to be inside a zip").
+  Returns `(console, serial)` rather than just `console` (ADR 0011), so
+  `archives.py` can DAT-match a zipped disc's title the same way a loose
+  one already was, not just detect which console it belongs to.
 
 **Tests** (`test_identify_disk_images.py`, 15 cases): one test per console
 path above (generic ISO, PS2-via-BOOT2, PSX-via-BOOT, PSP-via-marker,
@@ -825,7 +874,11 @@ crash") has to hold regardless of which one shows up.
 only, deliberately, since `py7zr` has no cheap partial read of a single
 member (checking even a few bytes means decompressing the *whole* member
 first), a fine cost for a small cartridge ROM but a bad one for a
-multi-gigabyte disc dump.
+multi-gigabyte disc dump. Returns `(console, serial)` (ADR 0011): the
+serial comes from whichever candidate member actually carries the
+ISO9660 filesystem with `SYSTEM.CNF` on it, which a multi-track dump of
+one disc only ever has exactly one of, so there's never a conflicting
+serial to choose between for a genuine single-disc set.
 
 **Tests** (`test_identify_archives.py`): member listing for zip/tar/7z,
 a truncated/corrupt zip and a corrupt 7z both held gracefully (empty
@@ -841,13 +894,36 @@ for it even though there was no header to check in the first place. The
 CRC32 is purely a cartridge-title lookup key (`dat.lookup_title_by_crc`),
 never dump verification.
 
+Four more consoles joined the header-verified set, each confirmed against
+real hardware documentation rather than guessed: Game Gear and Master
+System share the Master System's "TMR SEGA" header (required by Sega's
+own export BIOSes), scanned at 0x7FF0 falling back to 0x3FF0/0x1FF0 for a
+ROM too short to have a byte at the primary offset
+(`_tmr_sega_verified`); 32X carts are Genesis-slot cartridges with the
+same system-name field at 0x100 Genesis uses, just containing "SEGA 32X"
+instead of "SEGA GENESIS"/"SEGA MEGA DRIVE"; SG-1000 genuinely has no
+header or signature at all (the Z80 boots straight into cartridge code
+at 0x0000), so it's extension-only, same trust tier as SNES/NDS/Wii.
+
+**`single_rom_member()`/`member_crc32()`** (ADR 0011) extend DAT matching
+into archives: `single_rom_member()` is stricter than
+`single_console_from_members()` — it only returns a member when there's
+*exactly one* ROM-extension member in the whole listing, since hashing a
+CRC32 only means something when there's exactly one file to hash and one
+title to name the archive after; a legitimate multi-game zip (several
+same-console members) keeps its filename instead. `member_crc32()` is the
+archive-member counterpart to `_crc32_of` — same full-content hash,
+reading a zip member's stream or a 7z member's `BytesIOFactory`-extracted
+content instead of a plain file handle.
+
 **Tests** (`test_identify_roms.py`): one test per header-verified console
 (NES, GBA, all three N64 byte orders, Genesis, the GB-vs-GBC CGB-flag
-disambiguation), the mislabeled-extension negative case, the SNES/NDS
-extension-only pair, `.dol`-as-wii, both FDS signature variants plus the
-unsigned negative case, and `test_crc32_is_computed_from_full_file_contents`
-pinning the CRC32 computation itself against a hand-computed reference
-value.
+disambiguation, Game Gear, Master System at its fallback offset, 32X),
+the mislabeled-extension negative case, the SNES/NDS extension-only pair,
+`.dol`-as-wii, both FDS signature variants plus the unsigned negative
+case, SG-1000's extension-only case, the SMS/GG no-header negative case,
+and `test_crc32_is_computed_from_full_file_contents` pinning the CRC32
+computation itself against a hand-computed reference value.
 
 ---
 

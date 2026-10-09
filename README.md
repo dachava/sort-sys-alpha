@@ -6,8 +6,8 @@ Deterministic rules (extension, magic bytes, header/disc signatures) settle almo
 
 ## Status
 
-Implemented: scan, identify (one plugin per file type), rules-tier + LLM-tier routing, the confidence gate, plan/apply/undo, subfolder handling (unit/grab-bag/unsure), duplicate detection (within a scan batch and against already-filed content), the scheduled `run` command (`auto`/`plan` modes + toast notifications), the feedback loop (`routing.jsonl`, few-shot examples, plan-edit/undo corrections, `eval`), the `prune` command, and ROM DAT title matching for both disc serials (PS1/PS2/PSP) and cartridge CRC32 (NES, SNES, Genesis, GBA, N64, GB/GBC, FDS, and any other libretro-database console DAT you add). Vision (M6) is explicitly deprioritized — routing is format-based, not content-based, so it wouldn't change any decision this tool makes.
-Per-category naming templates (M8) and arcade/hash-keyed No-Intro DAT verification remain open.
+Implemented: scan, identify (one plugin per file type), rules-tier + LLM-tier routing, the confidence gate, plan/apply/undo, subfolder handling (unit/grab-bag/unsure), duplicate detection (within a scan batch and against already-filed content), the scheduled `run` command (`auto`/`plan` modes + toast notifications), the feedback loop (`routing.jsonl`, few-shot examples, plan-edit/undo corrections, `eval`), the `prune` command, and ROM DAT title matching for both disc serials (PS1/PS2/PSP) and cartridge CRC32 (NES, SNES, Genesis, GBA, N64, GB/GBC, FDS, Game Gear, Master System, 32X, SG-1000, and any other libretro-database console DAT you add) — including inside a single-game zip/7z, not just loose files. Naming defaults to a human-readable `{title}` (no date prefix), and the `rename` command re-applies today's naming templates to already-filed files without recategorizing them. Vision (M6) is explicitly deprioritized — routing is format-based, not content-based, so it wouldn't change any decision this tool makes.
+Per-category naming overrides and arcade/hash-keyed No-Intro dump verification remain open.
 
 ## Setup (Windows)
 
@@ -70,6 +70,7 @@ sort-sys-alpha undo [RUN_ID|last]   # revert a run via the move journal
 sort-sys-alpha eval                 # score the labeled fixture set against the LLM tier
 sort-sys-alpha doctor               # check model server reachability, config, permissions
 sort-sys-alpha prune                # remove empty folders under source, recursively (ADR 0006)
+sort-sys-alpha rename [--path DIR]  # recompute names for already-filed files, never recategorizes (ADR 0012)
 ```
 
 Every command accepts `--config <path>`.
