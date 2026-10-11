@@ -240,6 +240,33 @@ def test_prune_with_nothing_to_remove(tmp_path: Path) -> None:
     assert "no empty folders found." in result.output
 
 
+def test_apply_with_no_plan_flag_uses_the_most_recently_written_plan(tmp_path: Path) -> None:
+    """A labeled plan from `rename --path`/`dedupe --path` has a name
+    apply's old hardcoded default (`plan.json`) would never find --
+    `apply` with no `--plan` should pick it up anyway, the same "default
+    to the latest" shape `undo last` already uses.
+    """
+    from fixtures.make import make_docx
+
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    docs_dir = source / "_Filed" / "Documents"
+    docs_dir.mkdir(parents=True)
+    make_docx(docs_dir / "2026-01-01_old-slug.docx", title="Real Title")
+    config_path = _write_config(tmp_path, source)
+
+    rename_result = runner.invoke(
+        app, ["rename", "--config", str(config_path), "--path", str(docs_dir)]
+    )
+    assert rename_result.exit_code == 0
+    assert "1 to rename" in rename_result.output
+
+    result = runner.invoke(app, ["apply", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "moved 1, held 0." in result.output
+    assert (docs_dir / "Real Title.docx").exists()
+
+
 def test_rename_writes_a_labeled_plan_and_report(tmp_path: Path) -> None:
     source = tmp_path / "Downloads"
     source.mkdir()

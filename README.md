@@ -91,7 +91,7 @@ which stops after reviewing and notifies you).
 already-filed folder against today's rules without touching anything else:
 ```powershell
 uv run sort-sys-alpha plan --source "$HOME\Downloads\_Filed\Archives"
-uv run sort-sys-alpha apply --plan "$HOME\Downloads\_Filed\.sort-sys-alpha\plan-Archives.json"
+uv run sort-sys-alpha apply   # picks up the plan it just wrote automatically
 ```
 
 **Names look stale** (e.g. after changing a naming convention, or a new
@@ -101,7 +101,7 @@ moving anything between folders:
 uv run sort-sys-alpha rename
 # or scope it: uv run sort-sys-alpha rename --path "$HOME\Downloads\_Filed\Documents"
 # review report-rename.md, then:
-uv run sort-sys-alpha apply --plan "$HOME\Downloads\_Filed\.sort-sys-alpha\plan-rename.json"
+uv run sort-sys-alpha apply   # picks up the plan it just wrote automatically
 ```
 
 **Lots of duplicates under one filed folder** (e.g. the same ROM filed
@@ -111,7 +111,7 @@ without deleting anything:
 uv run sort-sys-alpha dedupe
 # or scope it: uv run sort-sys-alpha dedupe --path "$HOME\Downloads\_Filed\ROMs"
 # review report-dedupe.md, then:
-uv run sort-sys-alpha apply --plan "$HOME\Downloads\_Filed\.sort-sys-alpha\plan-dedupe.json"
+uv run sort-sys-alpha apply   # picks up the plan it just wrote automatically
 # losers land in Downloads\_Filed\_Duplicates\<category>\ -- delete that
 # folder yourself once you're happy, nothing is removed automatically
 ```
@@ -189,13 +189,16 @@ genesis = "C:/Users/DCH/dat-files/genesis.dat"
 
 ```powershell
 uv run sort-sys-alpha rename --path I:\ROMs --config sd-config.toml
-# review I:\.sort-sys-alpha\report-rename.md, then:
-uv run sort-sys-alpha apply --plan I:\.sort-sys-alpha\plan-rename.json --config sd-config.toml
+# review I:\.sort-sys-alpha\report-rename-ROMs.md, then:
+uv run sort-sys-alpha apply --config sd-config.toml   # picks up plan-rename-ROMs.json automatically
 
 uv run sort-sys-alpha dedupe --path I:\ROMs --config sd-config.toml
-# review I:\.sort-sys-alpha\report-dedupe.md, then:
-uv run sort-sys-alpha apply --plan I:\.sort-sys-alpha\plan-dedupe.json --config sd-config.toml
+# review I:\.sort-sys-alpha\report-dedupe-ROMs.md, then:
+uv run sort-sys-alpha apply --config sd-config.toml   # picks up plan-dedupe-ROMs.json automatically
 ```
+
+(`apply --plan <path>` still works if you ever need to apply something
+other than the plan you just generated — e.g. re-applying an older one.)
 
 `--path`/`--config` are relative to wherever you run the command *from*
 — if `sd-config.toml` doesn't resolve from your current directory,
@@ -219,7 +222,13 @@ sort-sys-alpha dedupe [--path DIR]  # quarantine confirmed duplicates into _Dupl
 ```
 
 Every command accepts `--config <path>` if your config isn't at the
-default location.
+default location. `apply` with no `--plan` uses whichever plan file was
+written most recently under `dest`'s state folder — covers the plain
+`plan.json` from a normal run as well as a labeled one from `--path`/
+`--source` scoping (`plan-rename-Documents.json`, `plan-dedupe-ROMs.json`,
+...), so you don't need to type that path back out by hand right after
+generating it. Pass `--plan` explicitly to apply something other than
+the most recent plan.
 
 ## Development
 

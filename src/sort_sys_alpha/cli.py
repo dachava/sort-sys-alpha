@@ -111,16 +111,33 @@ def plan(
     typer.echo(f"done in {_format_duration(elapsed)}")
 
 
+def _latest_plan_path(state_dir: Path) -> Path | None:
+    """The most recently written `plan*.json` under `state_dir` -- covers
+    `plan.json` as well as any labeled one (`plan-rename.json`,
+    `plan-dedupe-ROMs.json`, ...) from `--path`/`--source` scoping, so
+    `apply` with no `--plan` picks up whatever you just generated without
+    needing its full path typed out. Same "default to the latest" shape
+    as `undo`'s `last_run_id()`.
+    """
+    candidates = sorted(state_dir.glob("plan*.json"), key=lambda p: p.stat().st_mtime)
+    return candidates[-1] if candidates else None
+
+
 @app.command()
 def apply(
     config_path: Path | None = typer.Option(None, "--config", help="Path to config.toml."),
-    plan_file: Path | None = typer.Option(None, "--plan", help="Path to a plan.json to execute."),
+    plan_file: Path | None = typer.Option(
+        None, "--plan", help="Path to a plan.json to execute. Defaults to the most recently"
+        " written plan under dest's state folder."
+    ),
 ) -> None:
     """Execute a plan."""
     config = load_config(config_path)
-    path = plan_file or (config.dest / STATE_DIR_NAME / PLAN_FILENAME)
-    if not path.exists():
-        typer.echo(f"no plan found at {path}; run `sort-sys-alpha plan` first.", err=True)
+    state_dir = config.dest / STATE_DIR_NAME
+    path = plan_file or _latest_plan_path(state_dir)
+    if path is None or not path.exists():
+        shown = path or (state_dir / PLAN_FILENAME)
+        typer.echo(f"no plan found at {shown}; run `sort-sys-alpha plan` first.", err=True)
         raise typer.Exit(code=1)
 
     the_plan = load_plan(path)

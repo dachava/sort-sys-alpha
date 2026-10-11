@@ -38,7 +38,11 @@ after the overridden folder instead of colliding with a normal run's
 `"dedupe-<folder>"` (ADR 0013) label, computed from `--path` the same
 way. `_progress`/`_resolved` print to *stderr*, not stdout, specifically
 so a script piping `plan`'s final summary line isn't polluted by the
-per-item progress output.
+per-item progress output. `_latest_plan_path()` is `apply`'s own default
+when `--plan` isn't given: the most recently *written* `plan*.json`
+under `dest`'s state folder, by mtime — covers a labeled plan from
+`--path`/`--source` scoping too, not just the bare `plan.json`, the same
+"default to the latest" shape `undo`'s `last_run_id()` already uses.
 
 **Tests** (`test_cli.py`): `test_help`/`test_subcommands_registered` pin
 the CLI surface; one test per command exercises it end-to-end against a
@@ -53,6 +57,9 @@ behavior (`report-Archives.md` exists, plain `report.md` doesn't);
 thing for `rename`, and `test_dedupe_writes_a_labeled_plan_and_report`
 for `dedupe` — including that both files in a confirmed duplicate pair
 still exist on disk afterward, since `dedupe` only ever writes a plan.
+`test_apply_with_no_plan_flag_uses_the_most_recently_written_plan` checks
+`_latest_plan_path()` end-to-end: a `rename --path` plan apply's old
+hardcoded `plan.json` default would never have found.
 `test_apply_without_a_plan_fails_cleanly` and
 `test_undo_with_no_runs_fails_cleanly` cover the "nothing to do yet" exit
 paths.
