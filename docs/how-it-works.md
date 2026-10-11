@@ -294,6 +294,16 @@ gets held with an explicit "use `--source` instead" reason rather than
 acted on. It reuses the exact same `gate_item()` safety checks a normal
 plan does (ADR 0012).
 
+`dedupe` answers a third question — "this content already exists twice,
+which copy do I keep." Unlike `rename`, it never identifies or routes
+anything: it groups already-filed loose files by byte-identical content
+(same size-before-hash cost bound as ADR 0005/0009's checks), keeps
+whichever name in each group isn't a plain `slugify()` fixed point (a
+real title beats an auto-generated slug), and moves every other member
+into `dest/_Duplicates/<category>/`. That's still just a move — journaled
+and undoable like any other — never a delete, so hard rule 5 needs no
+amendment (ADR 0013).
+
 One real bug only showed up when actually running the `--source` rescan
 for real: the duplicate-against-destination check didn't exclude a
 candidate's own path from its search, so re-triaging a folder *already
@@ -329,6 +339,7 @@ sort-sys-alpha eval                 # score the labeled fixture set
 sort-sys-alpha doctor               # check model server, config, permissions
 sort-sys-alpha prune                # remove empty folders under source, recursively
 sort-sys-alpha rename [--path DIR]  # recompute names for already-filed files, never recategorizes
+sort-sys-alpha dedupe [--path DIR]  # quarantine confirmed duplicates into _Duplicates/, never deletes
 ```
 
 `--config` overrides the config file path on every command; `--source`
@@ -384,3 +395,6 @@ it was made:
   not just a loose file.
 - **0012** — The `rename` command: recomputes names for already-filed
   files, never recategorizes.
+- **0013** — The `dedupe` command: quarantines confirmed byte-identical
+  duplicates into `_Duplicates/`, a move rather than a delete, so hard
+  rule 5 needs no amendment.

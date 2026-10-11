@@ -104,6 +104,18 @@ uv run sort-sys-alpha rename
 uv run sort-sys-alpha apply --plan "$HOME\Downloads\_Filed\.sort-sys-alpha\plan-rename.json"
 ```
 
+**Lots of duplicates under one filed folder** (e.g. the same ROM filed
+twice under two different naming conventions) — quarantine the losers
+without deleting anything:
+```powershell
+uv run sort-sys-alpha dedupe
+# or scope it: uv run sort-sys-alpha dedupe --path "$HOME\Downloads\_Filed\ROMs"
+# review report-dedupe.md, then:
+uv run sort-sys-alpha apply --plan "$HOME\Downloads\_Filed\.sort-sys-alpha\plan-dedupe.json"
+# losers land in Downloads\_Filed\_Duplicates\<category>\ -- delete that
+# folder yourself once you're happy, nothing is removed automatically
+```
+
 **Leftover empty folders in Downloads** (after a grab-bag folder got split
 and emptied out):
 ```powershell
@@ -133,6 +145,7 @@ sort-sys-alpha eval                 # score the labeled fixture set against the 
 sort-sys-alpha doctor               # check model server reachability, config, permissions
 sort-sys-alpha prune                # remove empty folders under source, recursively
 sort-sys-alpha rename [--path DIR]  # recompute names for already-filed files, never recategorizes
+sort-sys-alpha dedupe [--path DIR]  # quarantine confirmed duplicates into _Duplicates/, never deletes
 ```
 
 Every command accepts `--config <path>` if your config isn't at the

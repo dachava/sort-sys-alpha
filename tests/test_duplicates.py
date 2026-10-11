@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sort_sys_alpha.duplicates import find_duplicate_in_dest, partition_duplicates
+from sort_sys_alpha.duplicates import find_duplicate_in_dest, group_duplicates, partition_duplicates
 from sort_sys_alpha.items import FileGroup, FileItem, FolderUnit
 
 
@@ -112,3 +112,36 @@ def test_find_duplicate_in_dest_missing_dir_returns_none(tmp_path: Path) -> None
     candidate.write_bytes(b"content")
 
     assert find_duplicate_in_dest(candidate, tmp_path / "does-not-exist") is None
+
+
+def test_group_duplicates_finds_a_pair(tmp_path: Path) -> None:
+    a = tmp_path / "Game (USA).gba"
+    b = tmp_path / "game-usa.gba"
+    a.write_bytes(b"same rom bytes")
+    b.write_bytes(b"same rom bytes")
+
+    groups = group_duplicates([a, b])
+
+    assert len(groups) == 1
+    assert set(groups[0]) == {a, b}
+
+
+def test_group_duplicates_ignores_unique_files(tmp_path: Path) -> None:
+    a = tmp_path / "a.gba"
+    b = tmp_path / "b.gba"
+    a.write_bytes(b"rom one")
+    b.write_bytes(b"rom two")
+
+    assert group_duplicates([a, b]) == []
+
+
+def test_group_duplicates_reports_progress(tmp_path: Path) -> None:
+    a = tmp_path / "a.gba"
+    b = tmp_path / "b.gba"
+    a.write_bytes(b"same content")
+    b.write_bytes(b"same content")
+    calls = []
+
+    group_duplicates([a, b], on_item=lambda i, t, name: calls.append((i, t, name)))
+
+    assert calls == [(1, 2, "a.gba"), (2, 2, "b.gba")]

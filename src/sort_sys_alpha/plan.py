@@ -15,17 +15,20 @@ from pydantic import BaseModel, Field
 
 from . import feedback
 from .config import Config
-from .duplicates import partition_duplicates
+from .duplicates import group_duplicates, partition_duplicates
 from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
 from .items import FileItem, FolderUnit, ScanItem
 from .llm.prompts import PROMPT_VERSION
+from .movefs import unique_target
+from .naming import slugify
 from .route import resolve, route
 from .scan import STATE_DIR_NAME, scan
 
 PLAN_FILENAME = "plan.json"
 REPORT_FILENAME = "report.md"
 HELD_LOG_FILENAME = "held.log"
+DUPLICATES_DIR_NAME = "_Duplicates"
 
 
 class PlanMove(BaseModel):
@@ -280,6 +283,76 @@ def build_rename_plan(
     return Plan(
         run_id=run_id, created=created, source=root, dest=config.dest, moves=moves, holds=holds
     )
+
+
+def build_dedupe_plan(
+    config: Config,
+    *,
+    path: Path | None = None,
+    run_id: str | None = None,
+    on_item: Callable[[int, int, str], None] | None = None,
+) -> Plan:
+    """Find byte-identical duplicates already filed under `dest` --
+    scoped to `path` if given, else the whole filed tree -- and quarantine
+    every loser into `dest/_Duplicates/<category>/`. See
+    `docs/adr/0013-dedupe-quarantine.md`.
+
+    Never deletes anything (hard rule 5 in full): a quarantine move is an
+    ordinary `PlanMove`, journaled and undoable like any other. Within
+    each duplicate group, the kept file is whichever name isn't a plain
+    `naming.slugify()` fixed point -- a human-readable or DAT-matched
+    title beats an auto-generated slug. A tie falls back to path order,
+    deterministic but not otherwise meaningful.
+
+    Only loose files are considered, same scope as ADR 0005/0009's checks.
+    No `gate_item()` call here -- there's no identification/routing
+    verdict to gate, just a content-equality decision.
+    """
+    created = datetime.now(UTC)
+    run_id = run_id or created.strftime("%Y%m%dT%H%M%S%fZ")
+    root = path or config.dest
+    state_dir = config.dest / STATE_DIR_NAME
+    quarantine_root = config.dest / DUPLICATES_DIR_NAME
+
+    try:
+        files = sorted(
+            p
+            for p in root.rglob("*")
+            if p.is_file()
+            and state_dir not in (p, *p.parents)
+            and quarantine_root not in (p, *p.parents)
+        )
+    except OSError:
+        files = []
+
+    groups = group_duplicates(files, on_item=on_item)
+
+    moves: list[PlanMove] = []
+    for group in groups:
+        keeper = min(group, key=lambda p: (p.stem == slugify(p.stem), str(p)))
+        for loser in sorted(group):
+            if loser == keeper:
+                continue
+            try:
+                category = loser.parent.relative_to(config.dest).as_posix()
+            except ValueError:
+                category = loser.parent.name
+            target = unique_target(quarantine_root / category / loser.name)
+            moves.append(
+                PlanMove(
+                    sources=[loser],
+                    move_root=loser,
+                    category=f"{DUPLICATES_DIR_NAME}/{category}",
+                    name=loser.stem,
+                    target=target,
+                    confidence=1.0,
+                    reason=f"duplicate of {keeper}, quarantined (never deleted)",
+                    size=loser.stat().st_size,
+                    mtime=loser.stat().st_mtime,
+                )
+            )
+
+    return Plan(run_id=run_id, created=created, source=root, dest=config.dest, moves=moves)
 
 
 def _state_dir(config: Config) -> Path:

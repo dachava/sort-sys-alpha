@@ -272,6 +272,26 @@ def test_rename_with_path_labels_output_with_folder_name(tmp_path: Path) -> None
     assert (state_dir / "report-rename-Documents.md").exists()
 
 
+def test_dedupe_writes_a_labeled_plan_and_report(tmp_path: Path) -> None:
+    source = tmp_path / "Downloads"
+    source.mkdir()
+    gba_dir = source / "_Filed" / "ROMs" / "gba"
+    gba_dir.mkdir(parents=True)
+    (gba_dir / "Game (U).gba").write_bytes(b"same rom bytes")
+    (gba_dir / "game-u.gba").write_bytes(b"same rom bytes")
+    config_path = _write_config(tmp_path, source)
+
+    result = runner.invoke(app, ["dedupe", "--config", str(config_path)])
+    assert result.exit_code == 0
+    assert "1 to quarantine" in result.output
+    state_dir = source / "_Filed" / ".sort-sys-alpha"
+    assert (state_dir / "report-dedupe.md").exists()
+    assert (state_dir / "plan-dedupe.json").exists()
+    # never deletes -- both files still exist until `apply` runs
+    assert (gba_dir / "Game (U).gba").exists()
+    assert (gba_dir / "game-u.gba").exists()
+
+
 def test_undo_with_no_runs_fails_cleanly(tmp_path: Path) -> None:
     source = tmp_path / "Downloads"
     source.mkdir()

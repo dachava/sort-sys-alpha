@@ -24,19 +24,21 @@ function names — they're written to be read as a sentence.
 
 ### `cli.py`
 Typer app wiring every subcommand (`scan`, `plan`, `apply`, `run`, `undo`,
-`eval`, `doctor`, `prune`, `rename`) to the library functions that do the
-real work — this file has almost no logic of its own, deliberately. The
-one piece of real logic is `_apply_source_override()`: `--source` does
-`config.model_copy(update={"source": source.expanduser()})` rather than
-mutating config in place, so the override only ever affects the `Config`
-object passed to that one call, never the file on disk. `plan`/`run` pass
-`source.name` as `write_plan()`'s `label`, so an overridden run's output
-files are named after the overridden folder instead of colliding with a
-normal run's `plan.json`/`report.md`; `rename` does the same with a
-`"rename"`/`"rename-<folder>"` label (ADR 0012), computed from `--path`
-the same way. `_progress`/`_resolved` print to *stderr*, not stdout,
-specifically so a script piping `plan`'s final summary line isn't
-polluted by the per-item progress output.
+`eval`, `doctor`, `prune`, `rename`, `dedupe`) to the library functions
+that do the real work — this file has almost no logic of its own,
+deliberately. The one piece of real logic is `_apply_source_override()`:
+`--source` does `config.model_copy(update={"source":
+source.expanduser()})` rather than mutating config in place, so the
+override only ever affects the `Config` object passed to that one call,
+never the file on disk. `plan`/`run` pass `source.name` as
+`write_plan()`'s `label`, so an overridden run's output files are named
+after the overridden folder instead of colliding with a normal run's
+`plan.json`/`report.md`; `rename` and `dedupe` do the same with a
+`"rename"`/`"rename-<folder>"` (ADR 0012) or `"dedupe"`/
+`"dedupe-<folder>"` (ADR 0013) label, computed from `--path` the same
+way. `_progress`/`_resolved` print to *stderr*, not stdout, specifically
+so a script piping `plan`'s final summary line isn't polluted by the
+per-item progress output.
 
 **Tests** (`test_cli.py`): `test_help`/`test_subcommands_registered` pin
 the CLI surface; one test per command exercises it end-to-end against a
@@ -48,7 +50,10 @@ real temp directory (`test_scan_reports_a_file`,
 behavior (`report-Archives.md` exists, plain `report.md` doesn't);
 `test_rename_writes_a_labeled_plan_and_report` /
 `test_rename_with_path_labels_output_with_folder_name` check the same
-thing for `rename`. `test_apply_without_a_plan_fails_cleanly` and
+thing for `rename`, and `test_dedupe_writes_a_labeled_plan_and_report`
+for `dedupe` — including that both files in a confirmed duplicate pair
+still exist on disk afterward, since `dedupe` only ever writes a plan.
+`test_apply_without_a_plan_fails_cleanly` and
 `test_undo_with_no_runs_fails_cleanly` cover the "nothing to do yet" exit
 paths.
 
@@ -371,6 +376,31 @@ name that's already correct, respecting `path` scoping, and the
 both-sides-held behavior for two already-filed files that turn out to be
 byte-identical (`test_build_rename_plan_holds_both_sides_of_an_existing_duplicate_pair`).
 
+**`build_dedupe_plan()`** (ADR 0013) is another sibling plan-builder, but
+unlike `build_rename_plan()` it never calls `identify`/`route`/
+`gate_item()` at all — there's no verdict to gate, just a content-equality
+decision. It walks files already filed under `dest` (or `path` if
+scoped), groups them by byte-identical content via
+`duplicates.group_duplicates()`, and for every group with two or more
+members picks a keeper — whichever name isn't a plain `naming.slugify()`
+fixed point wins, a tie falling back to path order — and emits a
+`PlanMove` for every other member, targeting
+`dest/_Duplicates/<category>/<name>` via the existing
+`movefs.unique_target()`. `_Duplicates` is excluded from the file walk
+itself, so a later `dedupe` run never tries to re-quarantine something
+already sitting in quarantine. This never deletes anything (hard rule 5
+in full) — it's an ordinary move, journaled and undoable by `apply`/
+`undo` like any other.
+
+**Tests** (`test_plan.py`): quarantining the slug-named twin and leaving
+the keeper untouched
+(`test_build_dedupe_plan_quarantines_the_slug_named_twin`), a file with
+no duplicate producing no moves
+(`test_build_dedupe_plan_skips_files_with_no_duplicate`), `path` scoping
+(`test_build_dedupe_plan_respects_path_scope`), and a second run never
+reconsidering files already sitting in `_Duplicates`
+(`test_build_dedupe_plan_never_reconsiders_its_own_quarantine_folder`).
+
 ### `apply.py`
 The only module allowed to touch `source`. `_is_stale()` is the plan/apply
 staleness re-check: for a directory (`FolderUnit`), it re-sums current
@@ -490,12 +520,16 @@ considered empty.
 
 ### `duplicates.py`
 Covered in depth in `how-it-works.md`'s "Duplicates" section and ADRs
-0005/0009. Both functions share the same size-before-hash cost bound.
-`find_duplicate_in_dest()` excludes the candidate's own path from its
-search — needed because a `--source` rescan of a folder already inside
-`dest` can pass a path that's already sitting in the exact directory
-being searched, which would otherwise match itself and report "an exact
-duplicate of itself" (found by actually running that rescan for real).
+0005/0009/0013. All three functions share the same size-before-hash cost
+bound. `find_duplicate_in_dest()` excludes the candidate's own path from
+its search — needed because a `--source` rescan of a folder already
+inside `dest` can pass a path that's already sitting in the exact
+directory being searched, which would otherwise match itself and report
+"an exact duplicate of itself" (found by actually running that rescan for
+real). `group_duplicates()` (ADR 0013) is the odd one out: it doesn't
+decide a winner, just returns every group of two or more byte-identical
+files among the paths it's given — picking the keeper is
+`plan.build_dedupe_plan()`'s naming judgment, not a content-equality one.
 
 **Tests** (`test_duplicates.py`): `partition_duplicates` gets two
 identical files (one kept, one held), same-size-different-content is
@@ -506,7 +540,9 @@ content, and a lone file isn't a duplicate of anything.
 match, the self-exclusion case, no match, and a missing destination
 directory) alongside the end-to-end coverage through `gate.py`/`plan.py`
 (which exercises it with an actual computed target, not just a bare
-function call).
+function call). `group_duplicates()` gets a pair found, unique files
+ignored, and progress callbacks firing once per hashed candidate in
+order.
 
 ### `feedback.py`
 Append-only `routing.jsonl`, written **only** for LLM-tier verdicts —

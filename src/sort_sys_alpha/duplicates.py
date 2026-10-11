@@ -22,6 +22,7 @@ at least one candidate.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 from .items import FileItem, ScanItem
@@ -89,3 +90,29 @@ def find_duplicate_in_dest(path: Path, dest_dir: Path) -> Path | None:
         return None
     digest = hash_file(path)
     return next((c for c in candidates if hash_file(c) == digest), None)
+
+
+def group_duplicates(
+    files: list[Path], *, on_item: Callable[[int, int, str], None] | None = None
+) -> list[list[Path]]:
+    """Every group of two or more byte-identical files among `files`
+    (ADR 0013's `dedupe` command). Same size-before-hash cost bound as
+    the two checks above. A file with no duplicate isn't returned at all.
+
+    Unlike `partition_duplicates`, this doesn't decide which member of a
+    group "wins" -- that's a naming judgment (`plan.build_dedupe_plan()`
+    picks a non-slug name over a slug), not a content-equality one.
+    """
+    by_size: dict[int, list[Path]] = defaultdict(list)
+    for f in files:
+        by_size[f.stat().st_size].append(f)
+
+    candidates = [c for group in by_size.values() if len(group) > 1 for c in group]
+    total = len(candidates)
+    by_hash: dict[str, list[Path]] = defaultdict(list)
+    for index, candidate in enumerate(candidates, start=1):
+        if on_item is not None:
+            on_item(index, total, candidate.name)
+        by_hash[hash_file(candidate)].append(candidate)
+
+    return [group for group in by_hash.values() if len(group) > 1]

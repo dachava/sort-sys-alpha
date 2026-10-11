@@ -383,6 +383,9 @@ sort-sys-alpha/
   date-prefixed slug (ADR 0010) -- `{slug}`/`{date}` stay available for a custom per-category override.
 - **Rename-only runs:** a dedicated `rename` command re-applies today's naming templates (and any newer
   DAT match) to already-filed files, never recategorizing them (ADR 0012).
+- **Confirmed-duplicate cleanup:** a dedicated `dedupe` command quarantines byte-identical duplicates
+  already filed under `dest` into `dest/_Duplicates/<category>/` -- a move, never a delete, so hard rule
+  5 stays untouched (ADR 0013).
 
 **Still open**
 1. **Per-category naming overrides:** whether any category wants something other than the new `{title}`

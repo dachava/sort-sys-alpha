@@ -3,7 +3,14 @@ from pathlib import Path
 
 from sort_sys_alpha.config import Config
 from sort_sys_alpha.feedback import read_routing_entries
-from sort_sys_alpha.plan import build_plan, build_rename_plan, load_plan, render_report, write_plan
+from sort_sys_alpha.plan import (
+    build_dedupe_plan,
+    build_plan,
+    build_rename_plan,
+    load_plan,
+    render_report,
+    write_plan,
+)
 from sort_sys_alpha.scan import STATE_DIR_NAME
 
 
@@ -340,3 +347,67 @@ def test_build_rename_plan_holds_both_sides_of_an_existing_duplicate_pair(
     assert the_plan.moves == []
     assert len(the_plan.holds) == 2
     assert all("exact duplicate" in hold.reason for hold in the_plan.holds)
+
+
+def test_build_dedupe_plan_quarantines_the_slug_named_twin(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    gba_dir = config.dest / "ROMs" / "gba"
+    gba_dir.mkdir(parents=True)
+    clean = gba_dir / "Castlevania - Aria of Sorrow (U).gba"
+    slug = gba_dir / "castlevania-aria-of-sorrow-u.gba"
+    clean.write_bytes(b"same rom bytes")
+    slug.write_bytes(b"same rom bytes")
+
+    the_plan = build_dedupe_plan(config)
+
+    assert len(the_plan.moves) == 1
+    move = the_plan.moves[0]
+    assert move.move_root == slug
+    expected_target = config.dest / "_Duplicates" / "ROMs" / "gba" / slug.name
+    assert move.target == expected_target
+    assert clean.exists()  # the keeper is never touched by the plan
+    assert the_plan.holds == []
+
+
+def test_build_dedupe_plan_skips_files_with_no_duplicate(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    gba_dir = config.dest / "ROMs" / "gba"
+    gba_dir.mkdir(parents=True)
+    (gba_dir / "one.gba").write_bytes(b"rom one")
+    (gba_dir / "two.gba").write_bytes(b"rom two")
+
+    the_plan = build_dedupe_plan(config)
+    assert the_plan.moves == []
+
+
+def test_build_dedupe_plan_respects_path_scope(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    gba_dir = config.dest / "ROMs" / "gba"
+    gbc_dir = config.dest / "ROMs" / "gbc"
+    gba_dir.mkdir(parents=True)
+    gbc_dir.mkdir(parents=True)
+    (gba_dir / "Game (U).gba").write_bytes(b"gba bytes")
+    (gba_dir / "game-u.gba").write_bytes(b"gba bytes")
+    (gbc_dir / "Other (U).gbc").write_bytes(b"gbc bytes")
+    (gbc_dir / "other-u.gbc").write_bytes(b"gbc bytes")
+
+    the_plan = build_dedupe_plan(config, path=gba_dir)
+
+    assert len(the_plan.moves) == 1
+    assert the_plan.moves[0].move_root == gba_dir / "game-u.gba"
+
+
+def test_build_dedupe_plan_never_reconsiders_its_own_quarantine_folder(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    gba_dir = config.dest / "ROMs" / "gba"
+    gba_dir.mkdir(parents=True)
+    (gba_dir / "Game (U).gba").write_bytes(b"gba bytes")
+    (gba_dir / "game-u.gba").write_bytes(b"gba bytes")
+
+    first = build_dedupe_plan(config)
+    quarantined = first.moves[0].target
+    quarantined.parent.mkdir(parents=True, exist_ok=True)
+    first.moves[0].move_root.rename(quarantined)
+
+    second = build_dedupe_plan(config)
+    assert second.moves == []
