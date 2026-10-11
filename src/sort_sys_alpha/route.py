@@ -190,6 +190,22 @@ def _builtin_rules(evidence: Evidence, config: Config) -> RouteVerdict | None:
             return RouteVerdict("ISOs", 1.0, "Dolphin RVZ compressed disc image, console unknown")
         return None
 
+    if kind == "disc_group":
+        console = details.get("console")
+        if console:
+            folder = f"ROMs/{console}"
+            if folder in allowlist:
+                serial = details.get("serial")
+                title = lookup_title(console, serial, config.roms.dat_files) if serial else None
+                group_kind = details.get("group_kind")
+                reason = (
+                    f"{console} disc set ({group_kind}), DAT match: {title}"
+                    if title
+                    else f"{console} disc set ({group_kind})"
+                )
+                return RouteVerdict(folder, 1.0, reason, title)
+        return None
+
     if kind == "rom_patch":
         return RouteVerdict("Other", 1.0, "IPS ROM patch, not a playable ROM")
 
@@ -214,11 +230,13 @@ def resolve(
     set when `verdict` is None, to explain *why* beyond the generic "no
     matching rule" (for example, the model was unreachable).
 
-    `FileGroup` items skip the LLM tier: `apply()` has no support for moving
-    a `FileGroup` as a unit (see `plan._move_root`), so a confident model
-    verdict for one would crash rather than hold. `FolderUnit` items already
-    carry a category from `subfolders.classify_subfolder` and never reach
-    either tier here.
+    `FileGroup` items skip the LLM tier unconditionally, verdict or not:
+    disc identification is header/filesystem-signature detection, exactly
+    the kind of thing hard rule 1 says must stay in the rules tier and
+    never reach the model (ADR 0014) -- `apply()` *can* move a `FileGroup`
+    as a unit now, but that's not why this stays rules-only. `FolderUnit`
+    items already carry a category from `subfolders.classify_subfolder`
+    and never reach either tier here.
     """
     if isinstance(item, FolderUnit):
         return (

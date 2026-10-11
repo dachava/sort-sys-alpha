@@ -2,9 +2,9 @@ from pathlib import Path
 
 from sort_sys_alpha.config import Config
 from sort_sys_alpha.gate import HoldDecision, MoveDecision, gate_item
-from sort_sys_alpha.identify import build_evidence
-from sort_sys_alpha.items import FileItem, FolderUnit
-from sort_sys_alpha.route import RouteVerdict
+from sort_sys_alpha.identify import build_evidence, identify_item
+from sort_sys_alpha.items import FileGroup, FileItem, FolderUnit
+from sort_sys_alpha.route import RouteVerdict, route
 
 
 def _config(tmp_path: Path, **overrides) -> Config:
@@ -158,3 +158,28 @@ def test_folder_unit_target_has_no_extension(tmp_path: Path) -> None:
     assert isinstance(decision, MoveDecision)
     assert decision.target.suffix == ""
     assert decision.name == "MyApp"
+
+
+def test_file_group_target_keeps_the_primarys_original_filename(tmp_path: Path) -> None:
+    """A disc group's members keep their own filenames -- renaming would
+    mean rewriting the .cue sheet's internal FILE references too, out of
+    scope (ADR 0014). Only the folder should change.
+    """
+    from fixtures.make import make_raw_cd_bin
+
+    cue = tmp_path / "2026-01-01_old-slug.cue"
+    bin_ = tmp_path / "2026-01-01_old-slug.bin"
+    cue.write_text('FILE "2026-01-01_old-slug.bin" BINARY\n')
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(bin_, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+    group = FileGroup("cue_bin", cue, (cue, bin_))
+
+    config = _config(tmp_path)
+    evidence = identify_item(group)
+    verdict = route(evidence, config)
+    assert verdict is not None
+
+    decision = gate_item(group, evidence, verdict, config)
+    assert isinstance(decision, MoveDecision)
+    assert decision.target.name == cue.name
+    assert decision.target.parent == config.dest / "ROMs" / "psx"

@@ -14,7 +14,7 @@ from . import download_source, magic, stats
 from .archives import ArchiveExtractor
 from .audio_video import AudioVideoExtractor
 from .base import Extractor
-from .disk_images import DiskImageExtractor
+from .disk_images import DiskImageExtractor, console_for_members
 from .executables import ExecutableExtractor
 from .fonts import FontExtractor
 from .images import ImageExtractor
@@ -102,10 +102,26 @@ def identify_item(item: _items.ScanItem) -> Evidence:
     base = stats.get_stats(item.primary)
     evidence = Evidence(path=item.primary, true_type=magic.get_true_type(item.primary), **base)
     evidence.kind = "disc_group"
-    evidence.details = {
+    details: dict[str, object] = {
         "group_kind": item.kind,
         "members": [str(p) for p in item.members],
         "member_count": len(item.members),
         "total_size": sum(p.stat().st_size for p in item.members if p.exists()),
     }
+    # Console detection for group members (ADR 0014): `.gdi` is
+    # Dreamcast-only by format definition, no byte inspection needed.
+    # `.cue`+`.bin` needs the same SYSTEM.CNF/PVD inspection a loose disc
+    # file already gets, tried against each track in turn. `.m3u`/`.ccd`
+    # are still out of scope -- left exactly as today, generic and held.
+    if item.kind == "gdi":
+        details["console"] = "dreamcast"
+    elif item.kind == "cue_bin":
+        tracks = [m for m in item.members if m != item.primary]
+        result = console_for_members(tracks)
+        if result is not None:
+            console, serial = result
+            details["console"] = console
+            if serial:
+                details["serial"] = serial
+    evidence.details = details
     return evidence

@@ -411,3 +411,27 @@ def test_build_dedupe_plan_never_reconsiders_its_own_quarantine_folder(tmp_path:
 
     second = build_dedupe_plan(config)
     assert second.moves == []
+
+
+def test_build_plan_files_a_psx_cue_bin_set(tmp_path: Path) -> None:
+    """Regression test: a PS1 cue/bin pair in Downloads used to dead-end
+    at "no matching rule" -- groups.py grouped it before identify_item()
+    ever ran console detection on it (ADR 0014).
+    """
+    from fixtures.make import make_raw_cd_bin
+
+    config = _config(tmp_path)
+    cue = config.source / "Frogger 2 - Swampy's Revenge (USA).cue"
+    bin_ = config.source / "Frogger 2 - Swampy's Revenge (USA).bin"
+    cue.write_text(f'FILE "{bin_.name}" BINARY\n')
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(bin_, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+
+    the_plan = build_plan(config)
+
+    assert the_plan.holds == []
+    assert len(the_plan.moves) == 1
+    move = the_plan.moves[0]
+    assert move.category == "ROMs/psx"
+    assert move.is_group
+    assert set(move.sources) == {cue, bin_}

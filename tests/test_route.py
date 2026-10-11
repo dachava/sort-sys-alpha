@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from sort_sys_alpha.config import Config
-from sort_sys_alpha.identify import build_evidence
+from sort_sys_alpha.identify import build_evidence, identify_item
 from sort_sys_alpha.items import FileGroup, FileItem, FolderUnit
 from sort_sys_alpha.route import resolve, route
 
@@ -542,6 +542,53 @@ def test_resolve_file_group_skips_the_llm_tier(tmp_path: Path) -> None:
     verdict, reason = resolve(group, build_evidence(cue), config)
     assert verdict is None
     assert reason is None
+
+
+def test_cue_bin_group_with_a_data_track_routes_to_roms_psx(tmp_path: Path) -> None:
+    from fixtures.make import make_raw_cd_bin
+
+    cue = tmp_path / "game.cue"
+    bin_ = tmp_path / "game.bin"
+    cue.write_text('FILE "game.bin" BINARY\n')
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(bin_, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+    group = FileGroup("cue_bin", cue, (cue, bin_))
+
+    config = Config.model_validate({})
+    verdict = route(identify_item(group), config)
+    assert verdict is not None
+    assert verdict.category == "ROMs/psx"
+
+
+def test_cue_bin_group_still_skips_the_llm_even_with_a_real_verdict(tmp_path: Path) -> None:
+    from fixtures.make import make_raw_cd_bin
+
+    cue = tmp_path / "game.cue"
+    bin_ = tmp_path / "game.bin"
+    cue.write_text('FILE "game.bin" BINARY\n')
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(bin_, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+    group = FileGroup("cue_bin", cue, (cue, bin_))
+
+    config = _llm_config("http://127.0.0.1:1")  # must not be contacted
+    evidence = identify_item(group)
+    verdict, reason = resolve(group, evidence, config)
+    assert verdict is not None
+    assert verdict.category == "ROMs/psx"
+    assert reason is None
+
+
+def test_gdi_group_routes_straight_to_roms_dreamcast(tmp_path: Path) -> None:
+    gdi = tmp_path / "game.gdi"
+    track = tmp_path / "track01.bin"
+    gdi.write_text('1 0 4 2352 "track01.bin" 0\n')
+    track.write_bytes(b"\x00")
+    group = FileGroup("gdi", gdi, (gdi, track))
+
+    config = Config.model_validate({})
+    verdict = route(identify_item(group), config)
+    assert verdict is not None
+    assert verdict.category == "ROMs/dreamcast"
 
 
 def test_resolve_falls_back_to_the_llm_when_no_rule_matches(

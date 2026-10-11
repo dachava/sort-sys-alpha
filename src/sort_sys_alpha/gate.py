@@ -12,7 +12,7 @@ from pathlib import Path
 from .config import Config
 from .duplicates import find_duplicate_in_dest
 from .identify.types import Evidence
-from .items import FileItem, FolderUnit, ScanItem
+from .items import FileGroup, FileItem, FolderUnit, ScanItem
 from .naming import NamingError, build_name
 from .route import RouteVerdict
 
@@ -101,7 +101,15 @@ def gate_item(
     if not name or name in (".", ".."):
         return HoldDecision(item, evidence, "name is empty or unsafe after slugifying")
 
-    full_name = f"{name}{_target_extension(item, evidence)}"
+    if isinstance(item, FileGroup):
+        # A disc group's members keep their own original filenames --
+        # the .cue sheet's internal FILE references would otherwise go
+        # stale (ADR 0014). Only the folder changes; the computed `name`
+        # above still exists for display (DAT title, if any) but isn't
+        # applied to any actual filename.
+        full_name = item.primary.name
+    else:
+        full_name = f"{name}{_target_extension(item, evidence)}"
     target = config.dest / category / full_name
 
     try:

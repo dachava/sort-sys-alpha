@@ -154,6 +154,26 @@ first — 2352-byte raw sectors have to be unwrapped to the 2048-byte
 logical sectors ISO9660 actually expects before any of the above can run
 at all, whether the dump is Mode 1 or Mode 2 Form 1.
 
+**Disc groups** (a loose `.cue`+`.bin` set, or a `.gdi`) are where this
+nearly fell through entirely: `groups.py` bundles a `.cue` and its track
+files into one `FileGroup` *before* identification runs, and for a long
+time `identify_item()` never ran any of the disc detection above against
+a group at all — it just produced generic evidence with no console,
+which `route.py` had no rule for, so real PS1 cue/bin dumps (even a
+multi-track one like a two-disc fighting game) dead-ended at "no matching
+rule" forever (ADR 0014). The fix reuses the exact same per-track check
+disc-in-a-zip already uses, tried against each referenced track file in
+cue order — the data track with `SYSTEM.CNF` wins; a later CD-DA audio
+track correctly produces no filesystem at all and is skipped, not an
+error. `.gdi` needs no byte inspection since the format is Dreamcast-only
+by definition. Every member keeps its own original filename on move —
+the `.cue` sheet's internal `FILE` references would otherwise go stale —
+and "hold the whole group if any member fails" now applies at apply-time
+too: a partially-moved group gets rolled back via the same journaled-move
+primitive in reverse, never left split between source and dest. `.m3u`
+(multi-disc playlists) and `.ccd` (img+sub) groups, and CHD images, are
+still unidentified — genuinely different formats, not folded into this.
+
 **Archives** get the same treatment without ever extracting anything:
 `.zip` (and, later, `.7z` via `py7zr`) member listings are read directly,
 and if every ROM-extension member in that listing belongs to one console,
@@ -365,9 +385,12 @@ stays loose-file-only (a duplicate whole folder, or a duplicate hiding
 inside two different archives, isn't detected); `.7z` disc-in-archive
 detection isn't implemented for the cost reasons above; a genuinely
 mixed-game zip still gets no DAT-matched name, correctly, since there's no
-single title to assign a whole archive of unrelated games; and a few
+single title to assign a whole archive of unrelated games; a few
 cartridge consoles with no header signature (SNES, NDS, Wii homebrew,
-SG-1000) stay extension-only by design, not by oversight.
+SG-1000) stay extension-only by design, not by oversight; and CHD disc
+images plus `.m3u`/`.ccd` disc groups aren't identified at all yet (ADR
+0014 brought `.cue`+`.bin` and `.gdi` groups in, deliberately left these
+three out).
 
 ## Decision record index
 
@@ -398,3 +421,6 @@ it was made:
 - **0013** — The `dedupe` command: quarantines confirmed byte-identical
   duplicates into `_Duplicates/`, a move rather than a delete, so hard
   rule 5 needs no amendment.
+- **0014** — Console detection and move support for `.cue`+`.bin`/`.gdi`
+  disc `FileGroup`s, keeping every member's original filename; CHD and
+  `.m3u`/`.ccd` remain open.

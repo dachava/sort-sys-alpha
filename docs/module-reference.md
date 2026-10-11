@@ -143,7 +143,10 @@ empty `members` list) — it falls through to becoming an ordinary loose
 `test_cue_without_a_matching_bin_is_not_a_group` (the no-op case) and
 `test_unreferenced_files_stay_ungrouped`. `test_identify_item_on_a_group_reports_disc_group`
 and `...on_a_file_uses_the_normal_pipeline` cover `identify.identify_item`'s
-group-vs-file branch from this module's output.
+group-vs-file branch from this module's output. Console detection itself
+(ADR 0014) is tested in `test_route.py`/`test_identify_disk_images.py`,
+not here -- this module only ever produces the member list, never reads
+track bytes.
 
 ### `subfolders.py`
 The unit/grab-bag/unsure classifier (`how-it-works.md` has the conceptual
@@ -236,6 +239,12 @@ rules-tier `kind` branches mostly map 1:1 to an `identify/` extractor's
 - **`kind == "disk_image"`'s DAT lookup**: only attempted when a serial
   was actually read (PS1/PS2/PSP); the matched title replaces the ISO
   volume label as `name_hint`, never changes the category.
+- **`kind == "disc_group"`** (ADR 0014) mirrors the `disk_image` branch
+  exactly -- `folder = f"ROMs/{console}"`, allowlist-checked, DAT lookup
+  by serial if `identify_item()` found one -- for a `cue_bin`/`gdi`
+  `FileGroup` that got a `console` in its evidence. No console detected
+  (still true for `m3u`/`ccd`, or an unrecognized `cue_bin`) → `None`,
+  same "no matching rule" hold as before this ADR.
 - **`CONSOLE_ALIASES`** (currently just `{"ps1": "psx"}`) exists because a
   real LLM-tier run said `"ROMs/ps1"` where the config's own canonical
   name is `"psx"` — a genuinely different word for the same thing in
@@ -244,13 +253,15 @@ rules-tier `kind` branches mostly map 1:1 to an `identify/` extractor's
   real mismatches, not a general nickname dictionary to extend
   speculatively.
 - **`resolve()`'s `FileGroup` short-circuit**: a `FileGroup` never reaches
-  the LLM tier at all, because `apply.py`/`plan._move_root` has no
-  implementation for moving a `FileGroup` as a unit — a confident model
-  verdict for one would crash rather than hold. `FolderUnit`s never reach
-  either tier here; they arrive with a category already decided by
-  `subfolders.classify_subfolder`.
+  the LLM tier, verdict or not -- disc identification is header/
+  filesystem-signature detection, exactly what hard rule 1 says must stay
+  in the rules tier (ADR 0014). This used to be justified as "`apply()`
+  can't move a `FileGroup` as a unit" when that was still true; it can
+  now, but that was never the real reason to keep this rules-only.
+  `FolderUnit`s never reach either tier here; they arrive with a category
+  already decided by `subfolders.classify_subfolder`.
 
-**Tests** (`test_route.py`, 53+ cases — the largest test file in the repo):
+**Tests** (`test_route.py`, 58+ cases — the largest test file in the repo):
 covers every rule-tier branch individually, the full `.md`/Genesis
 collision pair (`test_unverified_genesis_md_falls_back_to_note` /
 `test_verified_genesis_rom_with_md_extension_still_routes`), every DAT
@@ -271,7 +282,13 @@ consoles (`test_game_gear_header_verified_routes_to_console_folder`,
 tier-dispatch behavior (`test_resolve_folder_unit_never_calls_the_model`,
 `test_resolve_file_group_skips_the_llm_tier`,
 `test_resolve_falls_back_to_the_llm_when_no_rule_matches`,
-`test_resolve_holds_with_the_llm_error_when_unreachable`).
+`test_resolve_holds_with_the_llm_error_when_unreachable`), and the ADR
+0014 disc-group routing pair plus the Dreamcast case
+(`test_cue_bin_group_with_a_data_track_routes_to_roms_psx`,
+`test_cue_bin_group_still_skips_the_llm_even_with_a_real_verdict` --
+confirming the LLM-skip holds even once a real verdict exists, not just
+when `route()` comes back empty --
+`test_gdi_group_routes_straight_to_roms_dreamcast`).
 
 ### `gate.py`
 Independent of which tier produced a verdict — this is the actual
@@ -282,18 +299,24 @@ but the *stored* category is always the canonical-cased one) → hold;
 `build_name()` raises `NamingError` → hold; empty/unsafe name → hold;
 `target.resolve().relative_to(config.dest.resolve())` raises `ValueError`
 (the target would escape `dest`, e.g. via a `..`-laden name) → hold;
-**then**, the newest check, an exact-content duplicate already in
-`target.parent` → hold (ADR 0009, `FileItem` only). Only after all of
-that does a `MoveDecision` get built. `_canonical_category` is also where
+**then**, an exact-content duplicate already in `target.parent` → hold
+(ADR 0009, `FileItem` only). One more branch sits between the name check
+and the duplicate check: for a `FileGroup` (ADR 0014), `full_name` is
+`item.primary.name` -- the group's original filename, unchanged -- not
+the templated name every other item type gets; renaming would mean
+rewriting the `.cue` sheet's internal `FILE` references too, which this
+module deliberately doesn't attempt. Only after all of that does a
+`MoveDecision` get built. `_canonical_category` is also where
 `CONSOLE_ALIASES` (defined in this file, used only here) gets applied.
 
-**Tests** (`test_gate.py`, 11 cases): one test per hold reason in the list
+**Tests** (`test_gate.py`, 12 cases): one test per hold reason in the list
 above, plus `test_wrong_case_category_is_normalized_not_held` and
 `test_ps1_console_alias_is_normalized_to_psx` (confirming normalization
-succeeds rather than holding), and the two newest,
+succeeds rather than holding), the two duplicate-check cases,
 `test_exact_duplicate_of_already_filed_file_is_held` /
 `test_same_size_but_different_content_is_not_held_as_duplicate` (proving
-the duplicate check is genuinely content-aware, not just size-aware).
+the duplicate check is genuinely content-aware, not just size-aware), and
+`test_file_group_target_keeps_the_primarys_original_filename`.
 
 ### `naming.py`
 `build_name()` fills `{date}`/`{slug}`/`{title}` into
@@ -346,6 +369,14 @@ Orchestrates one full `scan → identify → route → gate` pass into a
   override) swaps `plan.json`/`report.md` for `plan-<label>.json`/
   `report-<label>.md` — this is the only thing standing between a rescan
   and silently overwriting a normal run's report.
+- **`_move_root()` for a `FileGroup` returns `item.primary`** (ADR 0014)
+  -- the defining file, e.g. the `.cue` sheet. This branch used to
+  `raise NotImplementedError` ("unreachable" since `route()` never
+  produced a `disc_group` verdict); now that it does, this is a real,
+  exercised code path, not dead code with a safety-net comment.
+  `PlanMove.is_group` (set to `isinstance(item, FileGroup)` here) is what
+  `apply.py` branches on to move every `sources` member individually
+  instead of treating `move_root` as the only path that needs to move.
 
 **`build_rename_plan()`** (ADR 0012) is a sibling plan-builder with a
 different source of moves: instead of scanning `source`, it walks files
@@ -373,8 +404,10 @@ rule, satisfied), progress callbacks and per-item latency recording, the
 within-batch duplicate path never reaching the LLM
 (`test_build_plan_holds_exact_duplicates_without_touching_the_llm`),
 scan-skips surfacing as holds, a non-cp1252-safe filename round-tripping
-through `write_plan()` correctly, and `plan.json`'s own JSON round-trip.
-`build_rename_plan()` gets its own set: recovering a real title from
+through `write_plan()` correctly, `plan.json`'s own JSON round-trip, and
+the ADR 0014 regression test `test_build_plan_files_a_psx_cue_bin_set`
+(a real PS1 cue/bin pair reaching `ROMs/psx` as an `is_group` move, not
+a "no matching rule" hold). `build_rename_plan()` gets its own set: recovering a real title from
 content a stale filename couldn't show
 (`test_build_rename_plan_recovers_real_title_from_content`), holding
 instead of recategorizing
@@ -412,8 +445,10 @@ reconsidering files already sitting in `_Duplicates`
 The only module allowed to touch `source`. `_is_stale()` is the plan/apply
 staleness re-check: for a directory (`FolderUnit`), it re-sums current
 member file sizes and compares against the plan's recorded total; for a
-single file, it compares both size *and* mtime against what was recorded
-at plan time. A hand-edit to `plan.json`'s `category` field before
+`FileGroup` (`move.is_group`, ADR 0014), same idea but over `move.sources`
+instead of `root.rglob("*")` -- any member missing, or the summed current
+size not matching, is stale; for a single file, it compares both size
+*and* mtime against what was recorded at plan time. A hand-edit to `plan.json`'s `category` field before
 `apply` runs is detected by comparing against `feedback.original_categories()`
 (what the routing log said at plan time) and logged as a correction — but
 only for moves that actually had an LLM-tier routing-log entry in the
@@ -423,6 +458,18 @@ against, so an edit to one of those is silently honored, not flagged as a
 is computed from `plan.grab_bag_dirs` *after* every move has run, using
 `_is_effectively_empty()` (no files anywhere under it, recursively — an
 empty nested subfolder doesn't count as "still has something in it").
+
+**`_apply_group_move()`** (ADR 0014) is where a `FileGroup` actually
+moves: each `move.sources` member is journaled and moved individually
+into `move.target.parent`, keeping its own filename (`unique_target()`
+still guards each one against a name collision there). "Hold the whole
+group if any member fails" applies here too, not just at the gate --
+if a member's move raises partway through, every already-moved sibling
+is rolled back by journaling and moving it back in reverse (the *same*
+primitive, no new journal logic), and the whole group is reported held.
+A rollback that itself fails is still attempted for every remaining
+sibling (best-effort) and surfaces in the hold reason so `undo`/manual
+cleanup has somewhere to start.
 
 **Tests** (`test_apply.py`): the move + journal entry
 (`test_apply_moves_a_file_and_journals_it`), both staleness cases
@@ -434,8 +481,15 @@ moving intact, the emptied-grab-bag reporting and its negative case
 folder with even one held file left behind isn't "emptied"), the
 correction-recording pair
 (`test_apply_records_a_correction_when_the_plan_category_was_hand_edited` /
-`...does_not_record_a_correction_when_the_category_is_unchanged`), and
-the cross-volume copy+verify+remove fallback.
+`...does_not_record_a_correction_when_the_category_is_unchanged`), the
+cross-volume copy+verify+remove fallback, and the ADR 0014 `FileGroup`
+set: both members landing with their own names intact and one journal
+row each (`test_apply_moves_a_file_group_preserving_member_names`), a
+simulated mid-group failure rolling the first member back rather than
+leaving it split between source and dest
+(`test_apply_rolls_back_a_partially_moved_file_group_on_failure`), and a
+member that changed size since plan holding the whole group
+(`test_apply_holds_a_stale_file_group`).
 
 ---
 
@@ -622,7 +676,13 @@ details carry the category/reason/members already decided by
 a `FileGroup`'s evidence describes the group as a whole (`kind =
 "disc_group"`) rather than whatever generic extractor would otherwise
 claim the *defining* sheet file (a `.cue` is plain text; its evidence
-should say "disc group," not "text file").
+should say "disc group," not "text file"). For `cue_bin`/`gdi` groups
+specifically, this now also runs real console detection (ADR 0014): a
+`gdi` group is always `console = "dreamcast"` (the format is Dreamcast-
+only by definition, no byte inspection needed); a `cue_bin` group calls
+`disk_images.console_for_members()` against every member except the
+primary `.cue`, trying each track file in turn. `m3u`/`ccd` groups are
+untouched -- still generic, still no console.
 
 Extractors, roughly by priority (lower runs first):
 
@@ -885,16 +945,32 @@ plus the handful of formats that *aren't* ISO9660 at all:
   Returns `(console, serial)` rather than just `console` (ADR 0011), so
   `archives.py` can DAT-match a zipped disc's title the same way a loose
   one already was, not just detect which console it belongs to.
+- **`console_for_members(tracks)`** (ADR 0014) reuses that exact same
+  `console_from_disc_stream()` call, once per referenced track file in
+  cue order, for a loose `.cue`+`.bin` `FileGroup` -- the third caller of
+  that shared check, alongside the loose-file path and the zip-member
+  path. The ISO9660 filesystem/`SYSTEM.CNF` only lives on the first
+  *data* track; a later CD-DA audio track correctly produces no PVD via
+  `console_from_disc_stream` and is just skipped, not an error, which is
+  what makes a multi-track dump (e.g. a two-track fighting game) resolve
+  correctly. A track that isn't a raw-sector candidate extension, or
+  can't be opened (missing file), is skipped the same way.
 
-**Tests** (`test_identify_disk_images.py`, 15 cases): one test per console
+**Tests** (`test_identify_disk_images.py`, 18 cases): one test per console
 path above (generic ISO, PS2-via-BOOT2, PSX-via-BOOT, PSP-via-marker,
 GameCube magic, Wii magic, WBFS magic, RVZ-has-no-console,
 not-an-iso-at-all), plus the raw-sector-specific cases
 (`test_raw_bin_psx_disc_via_system_cnf_boot`,
 `test_raw_bin_ps2_disc_via_system_cnf_boot2_mode1`), the boot-magic cases
 with and without a pregap (`test_saturn_boot_magic_no_pregap`/
-`...with_pregap`, `test_pce_cd_boot_magic`), and the `.bin`-fallback case
-(`test_non_disc_bin_falls_back_to_byte_preview`).
+`...with_pregap`, `test_pce_cd_boot_magic`), the `.bin`-fallback case
+(`test_non_disc_bin_falls_back_to_byte_preview`), and
+`console_for_members()`'s own cases: finding the data track first in a
+two-track set (`test_console_for_members_finds_the_data_track_first`), a
+non-disc bin returning `None`
+(`test_console_for_members_returns_none_for_a_non_disc_bin`), and a
+missing track being skipped rather than fatal
+(`test_console_for_members_skips_a_missing_track`).
 
 ### `identify/archives.py`
 Member listing without ever extracting, for zip (stdlib `zipfile`), tar

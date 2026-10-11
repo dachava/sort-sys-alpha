@@ -228,3 +228,77 @@ def test_apply_is_a_noop_when_the_item_is_already_at_its_target(tmp_path: Path) 
     assert (archives / "mystery.zip").exists()
     assert list(archives.iterdir()) == [archives / "mystery.zip"]  # no -2 sibling
     assert read_entries(config) == []  # nothing to undo, nothing journaled
+
+
+def _make_psx_cue_bin(source: Path, stem: str = "game") -> tuple[Path, Path]:
+    from fixtures.make import make_raw_cd_bin
+
+    cue = source / f"{stem}.cue"
+    bin_ = source / f"{stem}.bin"
+    cue.write_text(f'FILE "{stem}.bin" BINARY\n')
+    system_cnf = b"BOOT = cdrom:\\SCUS_123.45;1\r\n"
+    make_raw_cd_bin(bin_, volume_id="GAME", root_files={"SYSTEM.CNF": system_cnf}, mode=2)
+    return cue, bin_
+
+
+def test_apply_moves_a_file_group_preserving_member_names(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    cue, bin_ = _make_psx_cue_bin(config.source)
+
+    the_plan = build_plan(config)
+    assert len(the_plan.moves) == 1
+    assert the_plan.moves[0].is_group
+    result = apply_plan(the_plan, config)
+
+    target_dir = config.dest / "ROMs" / "psx"
+    assert set(result.moved) == {
+        (cue, target_dir / "game.cue"),
+        (bin_, target_dir / "game.bin"),
+    }
+    assert not cue.exists()
+    assert not bin_.exists()
+    assert (target_dir / "game.cue").exists()
+    assert (target_dir / "game.bin").exists()
+    assert len(read_entries(config)) == 2  # one journal row per member
+
+
+def test_apply_rolls_back_a_partially_moved_file_group_on_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import sort_sys_alpha.apply as apply_module
+    from sort_sys_alpha.movefs import move_path as real_move_path
+
+    config = _config(tmp_path)
+    cue, bin_ = _make_psx_cue_bin(config.source)
+
+    the_plan = build_plan(config)
+    assert the_plan.moves[0].sources == [cue, bin_]  # cue (primary) moves first
+
+    def _fail_on_bin(source: Path, target: Path) -> None:
+        if source.name == bin_.name:
+            raise OSError("simulated failure")
+        real_move_path(source, target)
+
+    monkeypatch.setattr(apply_module, "move_path", _fail_on_bin)
+    result = apply_plan(the_plan, config)
+
+    assert result.moved == []
+    assert len(result.held) == 1
+    assert "group move failed" in result.held[0][1]
+    # rolled back, not left split between source and dest
+    assert cue.exists()
+    assert bin_.exists()
+    assert not (config.dest / "ROMs" / "psx" / "game.cue").exists()
+
+
+def test_apply_holds_a_stale_file_group(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    _cue, bin_ = _make_psx_cue_bin(config.source)
+
+    the_plan = build_plan(config)
+    bin_.write_bytes(bin_.read_bytes() + b"\x00")  # grows after plan, before apply
+
+    result = apply_plan(the_plan, config)
+    assert result.moved == []
+    assert len(result.held) == 1
+    assert "changed between plan and apply" in result.held[0][1]

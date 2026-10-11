@@ -103,6 +103,29 @@ def console_from_disc_stream(f: Any) -> tuple[str, str | None] | None:
     return None
 
 
+def console_for_members(tracks: list[Path]) -> tuple[str, str | None] | None:
+    """(console, serial) for a `.cue`'s track files, tried in cue order
+    (ADR 0014). The ISO9660 filesystem -- and `SYSTEM.CNF` -- only lives on
+    the first *data* track; a later CD-DA audio track correctly yields no
+    PVD at all via `console_from_disc_stream`, so trying each track in
+    turn and taking the first hit is correct, not a guess. A track that
+    isn't a raw-sector candidate, or can't be opened, is skipped rather
+    than treated as fatal -- a group missing a file is caught separately
+    by `apply`'s staleness check, not here.
+    """
+    for track in tracks:
+        if track.suffix.lower() not in RAW_SECTOR_CANDIDATE_EXTENSIONS:
+            continue
+        try:
+            with track.open("rb") as f:
+                result = console_from_disc_stream(f)
+        except OSError:
+            continue
+        if result is not None:
+            return result
+    return None
+
+
 class DiskImageExtractor(Extractor):
     name = "disk_image"
     priority = 15

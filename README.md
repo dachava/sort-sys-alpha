@@ -74,6 +74,13 @@ consoles (NES, SNES, Genesis, GBA, N64, GB/GBC, FDS, Game Gear, Master
 System, 32X, SG-1000) are matched by a CRC32 of the ROM file — including
 one sitting inside a single-game zip/7z, not just loose files.
 
+A disc dumped as a loose `.cue`+`.bin` set (any number of tracks) or a
+`.gdi` (Dreamcast) files into `ROMs\<console>\` the same way, moving every
+track file together and keeping each one's original filename — renaming
+would mean rewriting the `.cue` sheet's internal track references too, so
+that's left alone on purpose. `.chd` and `.m3u`/`.ccd` disc sets aren't
+identified yet.
+
 ## Day-to-day usage
 
 **Normal flow** — review before anything moves:

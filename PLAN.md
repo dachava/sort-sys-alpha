@@ -70,6 +70,10 @@ Some files only work together, so the core moves **groups**, not just single fil
 A group is planned, gated and moved as one unit: if any member fails a check, the whole group is held. Later modules reuse this
 (an album folder: FLAC files + `.cue` + cover art).
 
+**Console identification and move support for `.cue`+`.bin` (any track count) and `.gdi` groups is done** (ADR 0014) --
+each member keeps its own original filename on move, since renaming would mean rewriting the `.cue` sheet's internal
+`FILE` references too. `.m3u` and `.ccd` groups are still generic/unidentified, same as before.
+
 ### 4.2b Subfolders (hybrid)
 Every subfolder of Downloads (except `_Filed`) is classified first as either a **unit** or a **grab-bag**:
 
@@ -197,7 +201,11 @@ is held (it's not renamed with a gap).
   `genesis`, `saturn`, `dreamcast`, `pcenginecd`, `msx`, `gamegear`, `mastersystem`, `sega32x`, `sg1000`, …), so `ROMs\` can be
   copied straight to the Steam Deck. The exact list should be checked against EmuDeck's docs when implemented.
 - Detection order: extension → header/disc signature → zip member inspection → model (the model is the last resort, with low default trust).
-- `.iso` / `.bin` / `.chd`: a console disc signature sends the file to `ROMs\<console>`. No signature: a PC/Linux/software disc goes to `ISOs\`.
+- `.iso` / `.bin`: a console disc signature sends the file to `ROMs\<console>`. No signature: a PC/Linux/software disc goes to `ISOs\`.
+  `.chd` isn't handled yet (it's a compressed container, not a raw-sector file -- needs its own reader or a `chdman` shell-out).
+- `.cue`+`.bin` (any track count) and `.gdi` groups get the same console-signature detection, reusing the loose-`.bin` logic
+  against each referenced track, and move as one unit with every member keeping its own filename (ADR 0014). `.m3u`/`.ccd`
+  groups are still unidentified/held, same as before.
 - `.zip` / `.7z`: if the members are ROMs of a single console, the archive goes to `ROMs\<console>` (it stays zipped). Otherwise it goes to `Archives\`.
 - Arcade sets (MAME/FBNeo zips) can't be identified from headers, so they're held until DAT matching exists.
 - **DAT matching (M7, started):** two shapes, both local libretro DATs via `roms.dat_files`:
@@ -386,10 +394,15 @@ sort-sys-alpha/
 - **Confirmed-duplicate cleanup:** a dedicated `dedupe` command quarantines byte-identical duplicates
   already filed under `dest` into `dest/_Duplicates/<category>/` -- a move, never a delete, so hard rule
   5 stays untouched (ADR 0013).
+- **Disc `FileGroup`s file correctly now:** `.cue`+`.bin` (any track count) and `.gdi` groups get console
+  detection and move as one unit, each member keeping its own filename untouched (ADR 0014). CHD and
+  `.m3u`/`.ccd` groups remain open.
 
 **Still open**
 1. **Per-category naming overrides:** whether any category wants something other than the new `{title}`
    default (needed to finish M8).
+2. **CHD disc images**, and **`.m3u`/`.ccd` group identification** -- genuinely different formats from
+   `.cue`+`.bin`/`.gdi` (ADR 0014 scoped those two in, left these three out).
 
 ## 12. Future modules (notes only)
 - **Music → FLAC library:** read a separate music downloads folder and move/sort into the FLAC library folder by tags

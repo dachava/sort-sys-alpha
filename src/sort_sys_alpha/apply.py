@@ -29,8 +29,53 @@ def _is_stale(move) -> bool:
     if root.is_dir():
         current_size = sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
         return current_size != move.size
+    if move.is_group:
+        # A FileGroup's members are sibling files, not one directory --
+        # mtime isn't meaningful across several files, so (like the
+        # directory case above) only the summed size is checked (ADR 0014).
+        if not all(p.exists() for p in move.sources):
+            return True
+        current_size = sum(p.stat().st_size for p in move.sources)
+        return current_size != move.size
     st = root.stat()
     return st.st_size != move.size or st.st_mtime != move.mtime
+
+
+def _apply_group_move(
+    move, run_id: str, config: Config
+) -> tuple[list[tuple[Path, Path]], str | None]:
+    """Move every member of a FileGroup into `move.target.parent`,
+    preserving each member's own filename (ADR 0014 -- renaming would mean
+    rewriting the .cue sheet's internal FILE references too, out of
+    scope). "Hold the whole group if any member fails" (PLAN.md 4.2)
+    applies at apply-time too: if a member's move fails partway through,
+    every already-moved sibling is rolled back using the same journaled
+    move primitive in reverse, so the group never ends up split between
+    source and dest. Returns `(moved_pairs, None)` on full success, or
+    `([], reason)` if the group was held (rolled back or never started).
+    """
+    target_dir = move.target.parent
+    done: list[tuple[Path, Path]] = []
+    for member in move.sources:
+        member_target = unique_target(target_dir / member.name)
+        append_entry(member, member_target, run_id, config)
+        try:
+            move_path(member, member_target)
+        except (OSError, MoveVerificationError) as e:
+            rollback_failures = []
+            for src, tgt in reversed(done):
+                try:
+                    append_entry(tgt, src, run_id, config)
+                    move_path(tgt, src)
+                except (OSError, MoveVerificationError) as rollback_err:
+                    rollback_failures.append(f"{tgt} -> {src}: {rollback_err}")
+            reason = f"group move failed on {member.name}: {e}"
+            if rollback_failures:
+                details = "; ".join(rollback_failures)
+                reason += f"; rollback incomplete ({details}) -- check journal/undo"
+            return [], reason
+        done.append((member, member_target))
+    return done, None
 
 
 def _is_effectively_empty(path: Path) -> bool:
@@ -60,6 +105,14 @@ def apply_plan(plan: Plan, config: Config) -> ApplyResult:
     for move in plan.moves:
         if _is_stale(move):
             held.append((move.move_root, "file changed between plan and apply"))
+            continue
+
+        if move.is_group:
+            group_moved, error = _apply_group_move(move, plan.run_id, config)
+            if error is not None:
+                held.append((move.move_root, error))
+                continue
+            moved.extend(group_moved)
             continue
 
         # A --source rescan of a folder already inside dest (e.g. dest's

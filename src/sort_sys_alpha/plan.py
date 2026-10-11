@@ -18,7 +18,7 @@ from .config import Config
 from .duplicates import group_duplicates, partition_duplicates
 from .gate import HoldDecision, MoveDecision, gate_item
 from .identify import identify_item
-from .items import FileItem, FolderUnit, ScanItem
+from .items import FileGroup, FileItem, FolderUnit, ScanItem
 from .llm.prompts import PROMPT_VERSION
 from .movefs import unique_target
 from .naming import slugify
@@ -42,6 +42,7 @@ class PlanMove(BaseModel):
     size: int
     mtime: float
     suggest_delete: bool = False
+    is_group: bool = False  # FileGroup: apply() moves each `sources` member individually (ADR 0014)
 
 
 class PlanHold(BaseModel):
@@ -72,10 +73,7 @@ def _move_root(item: ScanItem) -> Path:
         return item.path
     if isinstance(item, FolderUnit):
         return item.root
-    raise NotImplementedError(
-        "FileGroup moves aren't implemented — route() never returns a verdict for "
-        "disc_group evidence in M2, so this should be unreachable"
-    )
+    return item.primary  # FileGroup (ADR 0014) -- the defining file, e.g. the .cue sheet
 
 
 def _size_and_mtime(item: ScanItem) -> tuple[int, float]:
@@ -170,6 +168,7 @@ def build_plan(
                     size=size,
                     mtime=mtime,
                     suggest_delete=decision.suggest_delete,
+                    is_group=isinstance(item, FileGroup),
                 )
             )
         elif isinstance(decision, HoldDecision):
