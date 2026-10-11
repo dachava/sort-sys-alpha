@@ -133,6 +133,76 @@ uv run sort-sys-alpha undo <run_id> # or a specific one -- see journal.jsonl
 uv run sort-sys-alpha doctor
 ```
 
+## Running `rename`/`dedupe` against a different folder (e.g. an SD card)
+
+`rename` and `dedupe` only ever touch files under `config.dest` — not
+`source` — so pointing either at something that isn't your Downloads
+`_Filed` tree (an SD card's `ROMs` folder, say) means using a *second*
+config file with `dest` set there, passed via `--config`. Don't reuse
+your main `config.toml` for this: its `dest` is your Downloads
+`_Filed` folder, and silently changing that would affect your normal
+scheduled run too.
+
+Two things that trip this up:
+
+- **`rename`/`dedupe` compare folder names as plain strings, not through
+  the filesystem.** The `ROMs/<console>` allowlist entry expands to the
+  literal, capitalized `ROMs/snes`, `ROMs/genesis`, etc. (see
+  `config.resolved_folder_allowlist()`) — a card whose folder is actually
+  named lowercase `roms` won't match, and every file will be silently
+  skipped (0 moves, 0 holds) rather than held, because the category check
+  can't relate the file to `dest` at all if `dest` itself doesn't point
+  at the right place. Per-console subfolder names (`snes`, `nes`,
+  `genesis`, `gba`, `gbc`, ...) already match `config.roms.consoles`'
+  defaults, so usually only the top-level folder needs fixing.
+- **A Windows case-only rename (`roms` → `ROMs`) is silently a no-op** in
+  Explorer, since the filesystem is case-insensitive. Force it through
+  Command Prompt with an intermediate name:
+  ```cmd
+  cd I:\
+  ren roms rtemp
+  ren rtemp ROMs
+  ```
+
+Then, a config like `sd-config.toml` (adjust `dest` to your drive letter,
+and reuse your main config's `[roms.dat_files]` entries):
+```toml
+source = "I:/ROMs"
+dest = "I:/"
+min_age_minutes = 0
+
+[model]
+backend = "ollama"
+
+[model.ollama]
+base_url = "http://localhost:11434"
+name = "qwen2.5:7b-instruct"
+
+[folders]
+allow = ["ROMs/<console>"]
+
+[roms.dat_files]
+snes = "C:/Users/DCH/dat-files/snes.dat"
+genesis = "C:/Users/DCH/dat-files/genesis.dat"
+# ... one line per console you have DAT files for
+```
+
+```powershell
+uv run sort-sys-alpha rename --path I:\ROMs --config sd-config.toml
+# review I:\.sort-sys-alpha\report-rename.md, then:
+uv run sort-sys-alpha apply --plan I:\.sort-sys-alpha\plan-rename.json --config sd-config.toml
+
+uv run sort-sys-alpha dedupe --path I:\ROMs --config sd-config.toml
+# review I:\.sort-sys-alpha\report-dedupe.md, then:
+uv run sort-sys-alpha apply --plan I:\.sort-sys-alpha\plan-dedupe.json --config sd-config.toml
+```
+
+`--path`/`--config` are relative to wherever you run the command *from*
+— if `sd-config.toml` doesn't resolve from your current directory,
+`load_config` silently falls back to built-in defaults rather than
+erroring, so double-check the report's `Dest:` line actually shows your
+card's path before trusting a `0 moves, 0 held` result.
+
 ## CLI reference
 
 ```
