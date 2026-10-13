@@ -173,6 +173,19 @@ walkthrough). The intricacies worth remembering:
   same as the sheet extensions, but failing to identify a console from
   one of these doesn't force an `unsure` hold the way a `.gdi`/`.m3u`/`.ccd`
   does.
+- **`_disc_console_category` groups the folder's entries first** (ADR
+  0014 follow-up) via the same `groups.detect_groups()` `scan()` itself
+  uses, rather than routing each entry independently — a `.gdi`'s console
+  is a property of the sheet's own file format, not of any track's bytes
+  (Dreamcast tracks carry no byte-level marker at all), so routing a bare
+  `.gdi` or a lone track through the ordinary single-file pipeline could
+  never find a console no matter what's inside it. A `FileGroup` result
+  goes through `identify_item()` + `route()` (the exact `cue_bin`/`gdi`
+  logic a loose top-level set gets); anything that stayed ungrouped falls
+  back to the original per-file `build_evidence()` check for the
+  remaining ambiguous extensions. `.m3u`/`.ccd` groups still have no
+  console detection (same gap as the loose case), so a disc-dump folder
+  built from one of those still correctly holds as `unsure`.
 - **A script-only folder** (`_is_script_only_folder`: every file's
   extension is in `{.bat, .cmd, .ps1, .sh}`) is treated as an `Installers`
   unit even with zero `.exe` present — this exists specifically for a
@@ -190,15 +203,18 @@ walkthrough). The intricacies worth remembering:
   code-project vs. extracted-app vs. album; genuine ambiguity gets held,
   not silently resolved by whichever `if` happened to run first.
 
-**Tests** (`test_subfolders.py`, 22 cases): one test per unit signal
+**Tests** (`test_subfolders.py`, 23 cases): one test per unit signal
 (`test_extracted_app_is_a_unit`, `test_portable_exe_with_batch_helpers_is_a_unit`,
 `test_script_only_folder_is_a_unit`,
 `test_extracted_app_with_incidental_bin_is_still_a_unit`,
 `test_code_project_is_a_unit_in_other`, `test_album_is_a_unit`), the disc
 paths (`test_disc_dump_with_identifiable_console_is_a_unit`,
 `test_lone_unidentifiable_bin_is_a_grab_bag`,
-`test_disc_sheet_without_identifiable_console_is_unsure`,
-`test_psx_bin_cue_folder_is_a_unit`,
+`test_disc_sheet_without_identifiable_console_is_unsure` — now an `.m3u`
+fixture, since a well-formed `.gdi` no longer falls in this bucket —
+`test_gdi_disc_folder_is_a_unit_routed_to_dreamcast` (the Segagaga
+regression: grouping the folder's `.gdi` + track first is what makes
+this resolve at all), `test_psx_bin_cue_folder_is_a_unit`,
 `test_psx_folder_with_incidental_patcher_still_resolves` — the exact
 "disc wins over patcher" ordering above — and
 `test_cartridge_rom_with_incidental_bin_splits_as_grab_bag`, confirming a

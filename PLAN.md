@@ -395,14 +395,16 @@ sort-sys-alpha/
   already filed under `dest` into `dest/_Duplicates/<category>/` -- a move, never a delete, so hard rule
   5 stays untouched (ADR 0013).
 - **Disc `FileGroup`s file correctly now:** `.cue`+`.bin` (any track count) and `.gdi` groups get console
-  detection and move as one unit, each member keeping its own filename untouched (ADR 0014). CHD and
-  `.m3u`/`.ccd` groups remain open.
+  detection and move as one unit, each member keeping its own filename untouched (ADR 0014) -- and the
+  same detection now also applies when that same disc sheet+tracks set sits inside its own subfolder
+  (ADR 0015). CHD, `.m3u`/`.ccd` groups, and CDI (DiscJuggler) remain open.
 
 **Still open**
 1. **Per-category naming overrides:** whether any category wants something other than the new `{title}`
    default (needed to finish M8).
-2. **CHD disc images**, and **`.m3u`/`.ccd` group identification** -- genuinely different formats from
-   `.cue`+`.bin`/`.gdi` (ADR 0014 scoped those two in, left these three out).
+2. **CHD and CDI disc images**, and **`.m3u`/`.ccd` group identification** -- genuinely different formats
+   from `.cue`+`.bin`/`.gdi` (ADR 0014/0015 scoped those two in, left these four out). CDI (DiscJuggler)
+   specifically needs its actual track-table format studied before any detection code, not a guess.
 
 ## 12. Future modules (notes only)
 - **Music → FLAC library:** read a separate music downloads folder and move/sort into the FLAC library folder by tags

@@ -175,9 +175,15 @@ by definition. Every member keeps its own original filename on move —
 the `.cue` sheet's internal `FILE` references would otherwise go stale —
 and "hold the whole group if any member fails" now applies at apply-time
 too: a partially-moved group gets rolled back via the same journaled-move
-primitive in reverse, never left split between source and dest. `.m3u`
-(multi-disc playlists) and `.ccd` (img+sub) groups, and CHD images, are
-still unidentified — genuinely different formats, not folded into this.
+primitive in reverse, never left split between source and dest. The same
+console detection also applies when a disc sheet + its tracks sit inside
+their own subfolder, not just loose at the top level (ADR 0015) — a
+Dreamcast `.gdi`'s console comes from the sheet's own file format, not
+from any track's bytes, so `subfolders.py`'s folder classifier needed its
+own wiring into the same group-aware check, not just a byte-level fix.
+`.m3u` (multi-disc playlists), `.ccd` (img+sub) groups, CHD, and CDI
+(DiscJuggler) images are still unidentified — genuinely different
+formats, not folded into this.
 
 **Archives** get the same treatment without ever extracting anything:
 `.zip` (and, later, `.7z` via `py7zr`) member listings are read directly,
@@ -392,10 +398,10 @@ detection isn't implemented for the cost reasons above; a genuinely
 mixed-game zip still gets no DAT-matched name, correctly, since there's no
 single title to assign a whole archive of unrelated games; a few
 cartridge consoles with no header signature (SNES, NDS, Wii homebrew,
-SG-1000) stay extension-only by design, not by oversight; and CHD disc
-images plus `.m3u`/`.ccd` disc groups aren't identified at all yet (ADR
-0014 brought `.cue`+`.bin` and `.gdi` groups in, deliberately left these
-three out).
+SG-1000) stay extension-only by design, not by oversight; and CHD/CDI
+disc images plus `.m3u`/`.ccd` disc groups aren't identified at all yet
+(ADR 0014/0015 brought `.cue`+`.bin` and `.gdi` groups in, loose or in
+their own subfolder, deliberately left these four out).
 
 ## Decision record index
 
@@ -429,3 +435,6 @@ it was made:
 - **0014** — Console detection and move support for `.cue`+`.bin`/`.gdi`
   disc `FileGroup`s, keeping every member's original filename; CHD and
   `.m3u`/`.ccd` remain open.
+- **0015** — The same `.cue`+`.bin`/`.gdi` console detection also applies
+  when that set sits inside its own subfolder, not just loose at the top
+  level; amends ADR 0014.

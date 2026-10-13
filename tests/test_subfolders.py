@@ -112,16 +112,36 @@ def test_lone_unidentifiable_bin_is_a_grab_bag(tmp_path: Path) -> None:
 
 
 def test_disc_sheet_without_identifiable_console_is_unsure(tmp_path: Path) -> None:
-    """Unlike a bare `.bin`, a `.gdi`/`.m3u`/`.ccd` sheet has no non-disc
-    use, so failing to identify its console is still a whole-folder hold.
+    """Unlike a bare `.bin`, a disc sheet has no non-disc use, so failing
+    to identify its console is still a whole-folder hold -- true today
+    for `.m3u`/`.ccd` (unlike `.gdi`/`.cue_bin`, ADR 0014 never gave these
+    console detection).
     """
     root = tmp_path / "MyGame"
     root.mkdir()
-    (root / "disc.gdi").write_text("4\n")
-    (root / "track01.bin").write_bytes(b"\x00" * 100)
+    (root / "game.m3u").write_text("disc1.bin\n")
+    (root / "disc1.bin").write_bytes(b"\x00" * 100)
 
     result = classify_subfolder(root, Config())
     assert result.verdict == "unsure"
+
+
+def test_gdi_disc_folder_is_a_unit_routed_to_dreamcast(tmp_path: Path) -> None:
+    """Segagaga-shaped regression (ADR 0014 follow-up): a `.gdi` sheet's
+    console comes from the sheet's own file format, not from inspecting
+    any track's bytes -- Dreamcast tracks carry no byte-level marker at
+    all -- so `_disc_console_category` has to group the folder's sheet +
+    tracks first (the same way `scan()` does for a loose top-level set)
+    rather than routing the bare `.gdi` file or a track in isolation.
+    """
+    root = tmp_path / "Segagaga (English v1.1)[GDI]"
+    root.mkdir()
+    (root / "disc.gdi").write_text('1\n1 0 4 2352 "track01.bin" 0\n')
+    (root / "track01.bin").write_bytes(b"\x00" * 100)
+
+    result = classify_subfolder(root, Config())
+    assert result.verdict == "unit"
+    assert result.category == "ROMs/dreamcast"
 
 
 def test_psx_bin_cue_folder_is_a_unit(tmp_path: Path) -> None:

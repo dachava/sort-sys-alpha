@@ -78,8 +78,9 @@ A disc dumped as a loose `.cue`+`.bin` set (any number of tracks) or a
 `.gdi` (Dreamcast) files into `ROMs\<console>\` the same way, moving every
 track file together and keeping each one's original filename — renaming
 would mean rewriting the `.cue` sheet's internal track references too, so
-that's left alone on purpose. `.chd` and `.m3u`/`.ccd` disc sets aren't
-identified yet.
+that's left alone on purpose. The same set sitting inside its own
+subfolder files correctly too, moving as one intact folder. `.chd`/`.cdi`
+and `.m3u`/`.ccd` disc sets aren't identified yet.
 
 ## Day-to-day usage
 

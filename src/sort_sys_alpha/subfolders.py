@@ -13,8 +13,8 @@ from pathlib import Path
 
 from .config import Config
 from .groups import detect_groups
-from .identify import build_evidence
-from .items import FolderUnit, ScanItem
+from .identify import build_evidence, identify_item
+from .items import FileGroup, FolderUnit, ScanItem
 from .route import route
 
 CODE_PROJECT_MARKER_NAMES = {".git", "package.json", "pyproject.toml"}
@@ -123,11 +123,25 @@ def _has_ambiguous_disc_extension(entries: list[Path]) -> bool:
 
 
 def _disc_console_category(entries: list[Path], config: Config) -> str | None:
-    for path in entries:
-        if path.is_file() and path.suffix.lower() in DISC_IDENTIFY_EXTENSIONS:
-            verdict = route(build_evidence(path), config)
-            if verdict is not None and verdict.category.startswith("ROMs/"):
-                return verdict.category
+    """A `.cue`/`.gdi` sheet's console is a property of the group as a
+    whole (ADR 0014's `identify_item()` logic), not of any one track's
+    bytes in isolation -- Dreamcast especially: a `.gdi`'s track files
+    carry no byte-level marker at all, so routing the bare sheet file (or
+    a track alone) through the ordinary single-file pipeline never finds
+    a console no matter what's inside it. Grouping here first, the same
+    way `scan()` does, is what actually lets a disc-dump *folder* benefit
+    from that logic instead of only a loose top-level `.cue`/`.gdi` set.
+    """
+    files = [p for p in entries if p.is_file()]
+    for item in detect_groups(files):
+        if isinstance(item, FileGroup):
+            verdict = route(identify_item(item), config)
+        elif item.path.suffix.lower() in DISC_IDENTIFY_EXTENSIONS:
+            verdict = route(build_evidence(item.path), config)
+        else:
+            continue
+        if verdict is not None and verdict.category.startswith("ROMs/"):
+            return verdict.category
     return None
 
 
