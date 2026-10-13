@@ -926,6 +926,13 @@ plus the handful of formats that *aren't* ISO9660 at all:
   (`dat.normalize_serial()`) in the same pass.
 - **PSP**: no `SYSTEM.CNF` check needed — `PSP_GAME`/`UMD_DATA.BIN` as
   root-level entry *names* is enough.
+- **PS1 with no `SYSTEM.CNF` at all**: a real gap found against a real
+  disc (Raiden Project) — some early/Japanese PS1 titles have no
+  `SYSTEM.CNF`, since the PS1 BIOS itself falls back to booting a
+  root-level file literally named `PSX.EXE` when `SYSTEM.CNF` is
+  missing. `PS1_DIRECT_BOOT_MARKER` catches this as a last resort after
+  the `SYSTEM.CNF`/PSP checks — no serial is readable this way, so these
+  never get a DAT title, just correct `console` routing.
 - **Saturn / PC-Engine CD**: no ISO9660 filesystem at all — each format
   has its own fixed boot-sector text signature, scanned across a bounded
   200-sector prefix (`BOOT_MAGIC_SCAN_SECTORS`) rather than assumed at a
@@ -968,9 +975,12 @@ with and without a pregap (`test_saturn_boot_magic_no_pregap`/
 `console_for_members()`'s own cases: finding the data track first in a
 two-track set (`test_console_for_members_finds_the_data_track_first`), a
 non-disc bin returning `None`
-(`test_console_for_members_returns_none_for_a_non_disc_bin`), and a
-missing track being skipped rather than fatal
-(`test_console_for_members_skips_a_missing_track`).
+(`test_console_for_members_returns_none_for_a_non_disc_bin`), a missing
+track being skipped rather than fatal
+(`test_console_for_members_skips_a_missing_track`), and the direct-boot
+PS1 case (`test_console_for_members_finds_psx_via_direct_boot_exe`,
+`test_psx_disc_via_direct_psx_exe_with_no_system_cnf` for the loose-file
+path).
 
 ### `identify/archives.py`
 Member listing without ever extracting, for zip (stdlib `zipfile`), tar

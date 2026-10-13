@@ -36,6 +36,19 @@ def test_psx_disc_via_system_cnf_boot(tmp_path: Path) -> None:
     assert evidence.details["console"] == "psx"
 
 
+def test_psx_disc_via_direct_psx_exe_with_no_system_cnf(tmp_path: Path) -> None:
+    """Some PS1 titles (e.g. Raiden Project) have no SYSTEM.CNF at all --
+    the BIOS itself falls back to a root-level PSX.EXE boot file. No
+    serial is readable this way, so no DAT title, just correct routing.
+    """
+    path = tmp_path / "game.iso"
+    make_iso9660(path, volume_id="RAIDENPROJECT", root_files={"PSX.EXE": b"\x00" * 4})
+
+    evidence = build_evidence(path)
+    assert evidence.details["console"] == "psx"
+    assert "serial" not in evidence.details
+
+
 def test_psp_disc_via_marker_file(tmp_path: Path) -> None:
     path = tmp_path / "game.iso"
     make_iso9660(path, volume_id="GAME", root_files={"UMD_DATA.BIN": b"data"})
@@ -159,6 +172,13 @@ def test_console_for_members_returns_none_for_a_non_disc_bin(tmp_path: Path) -> 
     track.write_bytes(b"not a disc")
 
     assert console_for_members([track]) is None
+
+
+def test_console_for_members_finds_psx_via_direct_boot_exe(tmp_path: Path) -> None:
+    track = tmp_path / "Raiden Project (Japan).bin"
+    make_raw_cd_bin(track, volume_id="RAIDENPROJECT", root_files={"PSX.EXE": b"\x00" * 4})
+
+    assert console_for_members([track]) == ("psx", None)
 
 
 def test_console_for_members_skips_a_missing_track(tmp_path: Path) -> None:

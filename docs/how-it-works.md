@@ -146,7 +146,12 @@ documented, deliberate trust level, not a gap nobody noticed.
 `disk_images.py` reads the ISO9660 volume descriptor, and for PS1/PS2/PSP
 specifically reads `SYSTEM.CNF`'s boot line to tell which PlayStation
 generation it is — and, as of a later addition, to read the disc's serial
-number straight out of that same line. Saturn and PC-Engine CD/TurboGrafx
+number straight out of that same line — and, for a PS1 disc with no
+`SYSTEM.CNF` at all (some early/Japanese titles boot a root-level
+`PSX.EXE` directly instead, a real PS1 BIOS fallback, found against an
+actual disc that otherwise held with "no matching rule"), a last-resort
+check still gets the console right, just with no serial to match a DAT
+title against. Saturn and PC-Engine CD/TurboGrafx
 discs are identified by a boot-sector text signature scanned across a
 bounded window of sectors (handling discs that may or may not include
 their pregap). Raw `.bin` CD dumps need their own sector-framing logic

@@ -35,6 +35,12 @@ RVZ_MAGIC = b"RVZ\x01"
 
 PS_MARKERS = {"SYSTEM.CNF"}
 PSP_MARKERS = {"PSP_GAME", "UMD_DATA.BIN"}
+# The PS1 BIOS itself falls back to booting a root-level file literally
+# named PSX.EXE when SYSTEM.CNF is missing -- some early/Japanese titles
+# (e.g. Raiden Project) use this directly instead of the usual SYSTEM.CNF
+# indirection. No serial is readable this way, so these never get a DAT
+# title, just correct console routing.
+PS1_DIRECT_BOOT_MARKER = "PSX.EXE"
 
 # Saturn and PC-Engine CD don't have an ISO9660 filesystem at all -- each
 # format has its own fixed boot-sector header, normally right at the start
@@ -100,6 +106,8 @@ def console_from_disc_stream(f: Any) -> tuple[str, str | None] | None:
         return _ps1_or_ps2(view, pvd)
     if root_entries & PSP_MARKERS:
         return ("psp", None)
+    if PS1_DIRECT_BOOT_MARKER in root_entries:
+        return ("psx", None)
     return None
 
 
@@ -172,6 +180,9 @@ class DiskImageExtractor(Extractor):
                 elif root_entries & PSP_MARKERS:
                     result["console"] = "psp"
                     result["disc_kind"] = "psp"
+                elif PS1_DIRECT_BOOT_MARKER in root_entries:
+                    result["console"] = "psx"
+                    result["disc_kind"] = "playstation"
                 else:
                     result["disc_kind"] = "iso9660"
                 return result
